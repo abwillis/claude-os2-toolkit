@@ -211,6 +211,17 @@ base page reads `0x10003` - `PAG_BASE|PAG_WRITE|PAG_READ`, **not committed** - f
 the top pages the thread was using are committed; with `STACK_COMMITTED` the base page reads `0x1001b`,
 **committed and `PAG_GUARD`**, for one page.
 
+**The PIB's object is a 64 KB reservation, committed one page at a time as threads need TIBs**
+[OBS: WSeB 4.50 revision 14.089, 2026-10-17, `THREADS=1024`; a 32-bit LX program's `DosQueryMem`
+across the object `DosGetInfoBlocks`' PIB lies in, then again with 120 threads alive (TIDs 2-121), each
+blocked on one event semaphore]: at the base, `cb` 4096 and `0x10013`, as above; at base +0x1000,
+`cb` 61440 and `0x00003` - `PAG_READ|PAG_WRITE`, **reserved and not committed**, to the end of a 64 KB
+object; at base +0x10000, another object. With the 120 threads alive the base reads `cb` 8192 and
++0x2000 reads `cb` 57344, `0x00003`: the second page was committed, and only it. At 0x30 bytes a TIB
+(TIB2 0x18 after it), the first page holds TIDs up to 84, so thread TIBs past that page are committed
+when a thread needs one, and the reservation is not grown. This agrees with the kernel's per-process TIB
+array of 0xFFF0 bytes, reserved whole and committed up to a high-water mark [OBS-RE].
+
 **A guard page touched** [OBS: WSeB 4.50 revision 14.089, 2026-09-30; a one-page object allocated
 `PAG_COMMIT|PAG_GUARD|PAG_READ|PAG_WRITE` (`DosAllocMem` 0), then two stores 4 and 8 bytes into it]:
 the first store raises `XCPT_GUARD_PAGE_VIOLATION` (0x80000001) with `fHandlerFlags` 0, `cParameters`

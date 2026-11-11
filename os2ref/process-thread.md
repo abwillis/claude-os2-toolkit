@@ -568,6 +568,16 @@ both measured. The practical consequence for a caller is unchanged: do not build
 on which waiter "owns" a termination - synchronize on the thread's own
 completion signal (above) and treat `DosWaitThread` as best-effort reclamation.
 
+**An interrupted `DosWaitThread` returns the interruption, even when its thread has ended. `[OBS-RE]`, read
+out of the SMP kernel (14.104a) `_TKWaitThread` and `_tkRunWaitThreads`, 2026-10-17.** A waiter links itself on its
+target's waiter list (on the process's first thread for `*ptid = 0`) and sleeps interruptibly. A thread that ends
+detaches each list it serves (its own, then the first thread's) and overwrites each waiter's link word with the token
+`0xFFFF0000 | TID` before waking it. The waiter reads the token only after a sleep that returned 0 (a wake without
+a token sleeps again). When the sleep returns an error - an interruption - the waiter does not look at the token:
+it walks the list it joined, unlinks itself if still there (under a fault guard, since the target may be gone), and
+returns the sleep's error (`ERROR_INTERRUPT`, 95) with `*ptid` unchanged. So an interruption that coincides with
+the target's end loses that end: the TID is not reported, and, the thread being gone, a later wait for it is 309.
+
 **A terminated-and-reaped thread's resources are fully released, so an
 unbounded create/reap loop never exhausts memory - `[OBS]`, measured
 2026-08-22, real OS/2 (Warp 4.5, `a Warp Server for e-business system`).** Creating threads in batches

@@ -386,6 +386,88 @@ when started in, or switched to, the background - look first at `VioGetFont`/`Vi
 > 3 attribute bytes** per character (SBCS vs. multi-byte). The header (section 2.2) types it `PBYTE`
 > (single attribute byte); header value retained. [DOC - EDM2 "VioWrtCharStrAtt".]
 
+### 2.8 Taking part in a screen switch: VIO writers, the waits, the screen lock and pop-ups [OBS-RE] + [DOC-IBM]
+
+Read from the Warp 4.5 UNI `DOSCALL1.DLL` with its `.sym` (2026-10-14), where the `Vio*`
+bodies live; the SMP DLL was not read. IBM's reference pages ([DOC-IBM] Control Program
+Reference: VioSavRedrawWait/Undo, VioModeWait/Undo, VioScrLock, VioPopUp/VioEndPopUp) give
+the API; what follows is what the binary adds or contradicts.
+
+**A VIO call racing a switch waits, then succeeds.** The switch brackets itself with
+`VIOSRFBLOCK`/`VIOSRFUNBLOCK`: one system semaphore, `\SEM\VIOPRTSC` (which also serialises a
+switch against print-screen), then the outgoing and the incoming screen group's per-group VIO
+semaphore (an FS RAM semaphore in the group's control block). The VIO router takes the caller's
+own group semaphore around every ordinary VIO call, so a thread of either group is held until the
+switch ends and then runs normally; no return code comes out of the wait. Exempt: the threads
+registered with `VioSavRedrawWait` and `VioModeWait` (once they have returned from a
+notification) and the threads of a `VioRegister`ed subsystem. During the screen-lock timeout wait
+(below) the switcher releases the foreground group's semaphore and takes it back afterwards.
+
+**`VioSavRedrawWait` / `VioModeWait`.** Registration is per screen group, by process **and**
+thread: another thread of the same process gets 422 (`ERROR_VIO_FUNCTION_OWNED`). The switch wakes the registrant and waits for it to call again:
+save inside the switch-to-background, before the new group is published; redraw inside the
+switch-to-foreground, after it. `*NotifyType` is written as a word: 0 = save, 1 = restore (for
+the mode wait, 0/1 likewise from the mode action). An interrupted wait is retried internally, so
+the call never answers 95. `VioModeWait`'s `RequestType` 1 is reserved to screen group 1 (422
+otherwise); a non-zero reserved word answers 486, which the reference page does not list, and
+the page's 428 is never produced. If the registrant process dies, an exit-list routine marks the
+registration dead and releases the switcher, which then **blanks the screen** (and on a save,
+saves the blank).
+
+**`VioSavRedrawUndo` / `VioModeUndo`.** `KillIndic` 1 makes the waiting thread end itself with
+`DosExit(EXIT_THREAD)`; 0 makes its wait return 423 (`ERROR_VIO_RETURN`). Errors: 421 (bad indicator), 436 (handle
+not 0), 428 (nothing registered; `VioSavRedrawUndo` only), 422 (another process owns it), 427
+(`VioModeUndo`, per the page). A `KillIndic`-1 undo waits until the woken thread is gone.
+
+**`VioScrLock`.** The holder is recorded by **process id only** - the reference page's
+per-thread wording is not what the binary does. In the background, `WaitFlag` 0 answers with
+`Status` 1 (not locked); `WaitFlag` 1 blocks on the group's named system semaphore
+(`\SEM\LKNEDnnn.SEM`) with no timeout, and is granted when the group is restored to the
+foreground. An interrupted `WaitFlag`-1 wait answers 95 but leaves the waiter recorded, so the
+group's further locks (434) and saves are jammed until that process exits. A `VioScrLock` made from an exit-list routine
+while the session manager's lock semaphore is still held by a thread of the same process that ended
+inside DOSCALL1 answers **105** `ERROR_SEM_OWNER_DIED` `[OBS-RE]`: the fast-safe RAM semaphore
+request hands the semaphore to the exit-list thread with that code, and `VioScrLock` returns it
+without releasing it `[OBS-RE]`, so the semaphore stays held by the ending process and every other
+process's session-manager call that takes it waits `[INF]`, not provoked. When an application pop-up
+over the base shell's group ends, `DosQuerySysInfo` QSV 24 (foreground full-screen session) reads **257 (0x101)**:
+the end hands the group back with its packed session id, type in the high byte, not the plain group number
+`[OBS-RE]` `[OBS]`. A switch away from a
+group whose lock is held waits up to **`locktime`** milliseconds (default **30000**); if the lock
+is still held it **freezes the holder** (`DosSystemService` service 0, subfunction 1, argument 0)
+and completes the switch; the restore thaws it (same subfunction, argument 1).
+
+**`DosSetMNLockTime`** sets `locktime` only when the caller is the recorded lock-time owner (or
+none is recorded with the value `0xFFFF`). The image initialises the owner cell to 0, nothing
+writes it, so on this build the call **always answers 420** (`ERROR_SCS_NOT_SHELL`).
+
+**`VioPopUp`**, checks in order: 480 unless the shell has registered (`VioSavRedrawWait`) or the
+caller is the hard-error process; 436 for any non-zero handle (the page's 421 and PM-handle
+wording are not what the 16-bit body does); transparent only, 469 if the foreground session's
+display code page differs from the caller's; 421 for an option word above 3; then the one
+system-wide `\SEM\VIOPOPUP` (waited for with `VP_WAIT`, not at all with `VP_NOWAIT`; any failure
+answers **406**, `ERROR_VIO_EXISTING_POPUP`). The session manager then switches to screen group 3 (369 if the caller is
+already in group 3) and holds the popped-over session's VIO semaphore for the pop-up's whole life,
+which is what keeps that session's processes off the screen. The calling **process** (every
+thread, VIO and keyboard) is redirected to group 3, and its keyboard buffer is flushed. While up,
+VIO calls outside IBM's allowed list answer **430** (`ERROR_VIO_ILLEGAL_DURING_POPUP`); the binary's allowed list is the page's plus
+`VioGetFont`, `VioSetFont` and `VioPrtSc` (the last still refused with 402 to a non-hard-error
+caller). Selecting another session is blocked until the pop-up ends.
+
+**`VioEndPopUp`**: 405 when no pop-up is up, 436 for a non-zero handle; it restores the
+popped-over group (restore mode 1 after an opaque pop-up, 5 after a transparent one, 7 over the
+hard-error group) and releases `\SEM\VIOPOPUP`. Registered in the caller's exit list, so a
+process that ends with a pop-up up has it ended for it.
+
+**The VGA handler's answers in the background** [DOC-IBM: DDK VGA VDH source]: "foreground" is
+the handler's update-hardware flag. In the background, `VioGetFont` for the current font finds
+none loaded and searches user, then code-page, then ROM fonts by the caller's cell size (467 if
+none matches); `VioSetFont` stores the font in the saved environment as the active font (468 if
+it does not fit the mode, but it is still stored) instead of loading it; `VioGetCp` and
+`VioGetConfig` answer from the environment and the adapter data in both states. A process that is
+not a full-screen VIO process (windowed, PM, detached) gets 494 (`ERROR_VIO_EXTENDED_SG`) for `VioGetFont`/`VioSetFont`
+before the handler is reached.
+
 ---
 
 ## 3. KBD - the keyboard

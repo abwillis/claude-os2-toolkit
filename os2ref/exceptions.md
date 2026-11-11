@@ -427,6 +427,24 @@ be read. Two of its prefix tests do not do what they appear to [OBS-RE: `xcptGPF
 
 So neither a `66`- nor a `REP`-prefixed `INS`/`OUTS` is reported as privileged.
 
+Measured on OS/2 Warp 4.5 WSeB in a VirtualBox VM, 2026-10-26: a 32-bit application with no IOPL segment and an
+exception handler registered runs `IN AL,61h`, `OUT 80h,AL`, `CLI` and `STI` once each [OBS]:
+
+| | 14.089 **UNI** kernel | 14.104a **SMP** kernel (`OS2APIC.PSD`, one CPU) |
+|---|---|---|
+| `IN AL,61h` | `XCPT_PRIVILEGED_INSTRUCTION`, no parameters | runs (read 10h) |
+| `OUT 80h,AL` | `XCPT_PRIVILEGED_INSTRUCTION` | runs |
+| `CLI` | `XCPT_PRIVILEGED_INSTRUCTION` | runs, no exception; `PUSHFD` straight after it reads 46h - **IF clear** |
+| `STI` | `XCPT_PRIVILEGED_INSTRUCTION` | runs; `PUSHFD` then reads 202h |
+| EFLAGS at `PUSHFD` | 2206h (IOPL 2) | IOPL 0 |
+
+The UNI kernel starts a thread with IOPL 2, and its trap 0Dh handler has no `CLI`/`STI` arm; the SMP kernels start it
+with IOPL 0 and emulate `CLI` (IF cleared in the return frame, the global external-interrupt lock taken) and `STI`
+(released), and the next kernel entry releases the lock and turns IF back on [OBS-RE, unpublished
+notes] - which is why a `PUSHFD` after any system call reads IF set again. On the
+SMP kernel the application's `IN`/`OUT` reach the port: its I/O permission bitmap admits them (seen for 61h and 80h).
+The UNI run's own capture was overwritten by the SMP run; it can be re-measured from the VM's pre-SMP snapshot.
+
 For a **selector fault**, the error code the CPU pushes is the selector with its RPL bits
 cleared (index and TI bit) [x86 architecture]. That value is what `ExceptionInfo[1]` carries, next
 to `XCPT_SPACE_ACCESS`.

@@ -765,6 +765,21 @@ a 1-byte **count** (0 terminates the table) and a 1-byte **segment indicator**:
 [DOC - NE format description "RESIDENT-NAME TABLE"/"MODULE-REFERENCE TABLE"/"IMPORTED-NAME TABLE";
 offsets/counts from `newexe.h`]
 
+### 3.6a Resource Table - the OS/2 form [OBS-RE]
+
+An OS/2 NE module's resources are **segments**. `ne_rsrctab` points at `ne_cres` four-byte entries, each a
+(type id, name id) pair of words, and resource *k* (0-based) is segment `ne_cseg - ne_cres + 1 + k`: the last
+`ne_cres` entries of the Segment Table, each one resource, at offset 0, its length the segment's. The type ids are
+OS/2's `RT_*` values (4, 5 menus and dialogs; 6, 7 the font directory and fonts in a font module).
+
+`newexe.h`'s `struct new_rsrc` / `rsrc_typeinfo` / `rsrc_nameinfo` (`rs_align`, then type blocks of name blocks) is
+the Windows NE resource table, under the same `EXE386 == 0` guard; an OS/2 NE module does not use it.
+
+[OBS-RE - read from the shipped WSeB 4.50 `SYSFONT.DLL` (`ne_cseg` 7, `ne_cres` 7: entries (6,1) and (7,101)..(7,106),
+filling `ne_rsrctab`..`ne_restab` exactly, 28 bytes) and `PMFORMAT.DLL` (`ne_cseg` 17, `ne_cres` 16: segments 2-17,
+64 bytes), 2026-10-30. Measured on real OS/2 the same way: a resource got with `DosGetResource` is its own
+segment - two resources of one module are freed independently, each to 487 once its own gets are spent.]
+
 ---
 
 ## 3.7 Absolute-value (`:ABS`) exports and how a fixup consumes one [DOC-IBM / OBS-RE / OBS]
