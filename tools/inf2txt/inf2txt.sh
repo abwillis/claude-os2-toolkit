@@ -65,8 +65,11 @@ if [ -n "$md" ]; then
     exit 0
 fi
 
+# Tags are stripped, but IPF text escapes a literal "<" as "<<" and ">" as ">>" (fpGUI RichTextDocumentUnit.pas,
+# the "<"/">" arms of its element scanner): "#include <<netcons.h>>" must come out as "#include <netcons.h>", not
+# be eaten as a tag. "<<" is parked as \001 while the tags go, then restored.
 "$bin" "$1" \
- | sed -E 's/<[^>]*>//g' \
+ | sed -E 's/<</\x01/g; s/<[^<>]*>//g; s/\x01/</g; s/>>/>/g' \
  | tr -d '\000-\010\013\014\016-\037' \
  | sed -E 's/[ \t]+$//' \
  | cat -s \
