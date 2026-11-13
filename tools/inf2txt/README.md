@@ -12,6 +12,13 @@ Build first (no binary is shipped), then use:
 
     ./build.sh                              # one-time; writes ~/.local/share/os2-toolkit/inf2txt/inf2txt
     ./inf2txt.sh path/to/book.inf > book.txt
+    ./inf2txt.sh --md path/to/book.inf > book.md      # GitHub-flavoured markdown
+    os2-lib convert <slug> --md                       # the same, for a library item
+
+`--md` needs a build of this checkout (`inf2txt -l` writes each topic's contents level); `inf2md.awk` turns the
+richtext into markdown - headings from the contents levels, bold/italic, inline code, preformatted panels (examples,
+IBM's box-drawn tables) as fenced blocks, BEL bullets as `- `. Its header says what maps to what. Plain-text output
+is unchanged by `-l`'s addition (checked byte-for-byte on two books, 2026-11-13).
 
 ## Third-party note - read before redistributing a build
 
