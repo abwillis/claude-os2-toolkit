@@ -680,6 +680,28 @@ SMP under VirtualBox (2026-10-27, a test character driver logging every request)
 - **The lock.** Each piece is locked, never copied, and sent as **one request per physically contiguous run** in one packet
   reused (never a scatter list). A driver at function level 3 with capability bit 1 (`DEV_16MB`) gets runs anywhere;
   any other gets one contiguous run below 16 MB, the kernel moving pages to make it (the lock fails if it cannot).
+- **A buffer the lock cannot take, or seems unable to take.** [OBS] 14.104a SMP under VirtualBox, 32-bit `DosRead` and
+  `DosWrite` on a test character driver that logs every request and keeps up to 512 written bytes:
+  - **The trap:** treating any page the caller cannot read or write as an error. A reserved, never-committed page is
+    *lent*, not refused.
+  - READ into a committed read-only page: rc 5, `*pcbActual` 1, no request, no exception. [OBS-RE] the 1 is the lock's
+    page-list entry count (its failure exit sets it to 1), not a byte count, and the rc is the lock's own.
+  - The lock asks for write access only on the READ direction [OBS-RE] (the 16-bit lock helper adds the write flag only
+    for a read), so **a WRITE from a read-only page succeeds**: rc 0, count 100.
+  - **A WRITE whose buffer runs into a reserved, uncommitted page of the caller's own object succeeds:** 8192 bytes with
+    the second page reserved gave rc 0, count 8192, no exception. 512 bytes starting 256 below the page boundary went as
+    **one** request of 512, and the driver received 00h for every byte from the reserved page. Afterwards `DosQueryMem`
+    still reports that page uncommitted (flags 3: read and write, no `PAG_COMMIT`).
+  - The lock covers the whole 64 KB tile [OBS-RE], but uncommitted pages elsewhere in the tile do not fail it: a 100-byte
+    READ and a 100-byte WRITE from a committed page in an otherwise uncommitted tile both gave rc 0, count 100.
+  - Before any of this, DOSCALL1's `DOS32READ`/`DOS32WRITE` touch the buffer's first byte when the count is not 0
+    [OBS-RE] (unpublished notes), so an unmapped *first* byte faults in the caller before the kernel runs.
+  - **How to verify:** `DosQueryMem` the page after the call - `PAG_COMMIT` is still clear - and read back what the
+    driver kept.
+  - **The tell:** an implementation that answers a device write with an address error (487) or an access error for a
+    buffer whose later pages are merely reserved is wrong; real OS/2 transfers zeros.
+  - **Not measured:** a READ across a reserved page (on the 8 KB attempt the test driver's own READ loop trapped, so no
+    answer was captured), a page in no object, and the 16-bit calls.
 - **The packet**: Len 2Ch, command 04h (READ), 08h (WRITE) or **09h when DosSetVerify is on**, XferAddr the run's
   physical start, the count, the SFN (`sfi_selfsfn`).
 - **Counts.** Each request's returned count advances the position; **a short count without error ends the call, rc 0**,
