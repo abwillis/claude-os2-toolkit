@@ -30,7 +30,8 @@ routes into the reference, verifies against the headers, and writes the code.
 | `os2-toolkit:ingest` | File OS/2 material you mention (a downloaded PDF, a folder of books, an SDK) into your local OS/2 library - see [`PATHS.md`](PATHS.md). |
 | `os2-toolkit:track` | File, find, comment on and close work items on a Gitea tracker - work state, as opposed to the durable facts `know` holds. |
 | `os2-toolkit:know` | The knowledge cache: search it before the books, and record what a session established - including what it searched for and did *not* find. |
-| `os2-toolkit:os2-review` | On request, dispatch the `os2-reviewer` agent: a grounded review of a change touching OS/2 semantics with an advisory A-F grade, or a cheap citations-only pass. Advice, not a gate. |
+| `os2-toolkit:os2-review` | On request, dispatch the `os2-reviewer` agent: a grounded review of a change touching OS/2 semantics with an A-F grade against a landing bar of A-, or a cheap citations-only pass. A `full` round freezes the project until the work lands. |
+| `os2-toolkit:os2-reviewer-reworker` | After a review below A-, dispatch the `os2-reviewer-reworker` agent: root-cause analysis, a stop for your answers, then a fix of exactly and only the reviewer's findings, mapped hunk by hunk. |
 
 The tools land on your `PATH` (`lx_export.py`, `lx_disasm.py`, `lx_resolve_imports.py`,
 `driver_re.py`, `inf2txt.sh`, `ddk_unpack.py`, `kdb_cmd.py`, `os2-lib`, `know`, `track` ...).
@@ -56,9 +57,9 @@ them. Findings go into the checkout via `os2-toolkit:contribute`.
 | Path | What |
 |---|---|
 | `os2ref/` | 50 pristine, project-agnostic OS/2 reference docs - internals, the full app API surface, and (in `klibc-runtime-glue.md`) how the kLIBC/LIBC Next POSIX compatibility layer maps Unix-style fd/`fork`/signal/`malloc`/socket semantics onto it, for porting GCC/Unix code. `os2ref/README.md` is the router. |
-| `skills/` | The plugin's skills: `os2-dev` (map + disciplines), `setup`, `contribute`, `ingest`, `know`, `track`, `os2-review` - see the table above. |
+| `skills/` | The plugin's skills: `os2-dev` (map + disciplines), `setup`, `contribute`, `ingest`, `know`, `track`, `os2-review`, `os2-reviewer-reworker` - see the table above. |
 | `bin/` | `PATH` shims for the tools and corpus scripts. |
-| `agents/` | `os2-reviewer`: a read-only, sceptical reviewer that grounds itself in primary OS/2 sources before grading; its grade is advisory. |
+| `agents/` | `os2-reviewer`: a read-only, sceptical reviewer that grounds itself in primary OS/2 sources before grading, with a landing bar of A-; `os2-reviewer-reworker`: repairs exactly and only a review's findings, in two phases, while the project is frozen. |
 | `hooks/` | A `PreToolUse` nudge: a broad grep of the reference material is blocked once, pointing at the knowledge cache. One-shot, opt out with `# know-miss`, and it fails open. |
 | `tools/` | `inf2txt/` (read IBM `.INF` books as text); `ddk_unpack` (merge the DDK's packages into one greppable tree); `lx_export` (objects/exports/imports), `lx_disasm` (disassemble at symbol/VA/`object:offset`), `lx_entry_parms` (per-ordinal parameter words), `lx_resolve_imports` (name a fixup's target), `lx_fixchain` (LX chained fixups), `lx_symmatch` (does this `.SYM` belong to this image?), `sym2map` (`.SYM` -> addresses), `ne_profile` (16-bit NE), `extract_omf_lib_ordinals` (ordinal -> API name), `lx_retf_argbytes` (argument bytes a 16-bit export pops), `driver_re` (dissect a device driver) to inspect binaries; `unpack/` (`os2-unpack`, `os2-unpack2`: expand IBM PACK/PACK2 install files) and `msgdump` (dump a `.MSG` message file); `rc-ids/` and `rc-mnemonics/` (catch a `.RC`'s missing dialog templates, colliding ids and duplicate mnemonics, which no compiler reports); `kdb_*` (drive the OS/2 kernel debugger; `kdb_passthrough` keeps its pipe connected); `ghidra/` (headless LX and NE decompile pipelines, plus a cross-reference dump); `know` (the knowledge cache over your library); `track` (work items on a Gitea issue tracker). |
 | `corpus/` | Scripts to build a **local** searchable corpus of the IBM books/redbooks/EDM2 on your own machine (on `PATH` as `os2-fetch-books`, `os2-fetch-edm2`, `os2-fetch-archive-book`, `os2-pdf-to-text`); `ingest` uses them, and `search.sh` works without the plugin. Ships none of that material. |

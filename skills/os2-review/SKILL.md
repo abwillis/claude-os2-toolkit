@@ -1,6 +1,6 @@
 ---
 name: os2-review
-description: Review an OS/2 change before trusting it - dispatch the os2-reviewer agent for a grounded, graded (A-F) review of work touching OS/2 semantics (Dos*/Win*/Vio* APIs and ordinals, PM, VIO, drivers, the LX/NE loader, kernel objects, thunks, the 16/32-bit ABI split), with the change set, claims, evidence, populations and grade history packaged for it. Use only when the user asks - "review this OS/2 change", "grade this", "check this against IBM" - never on your own initiative, and not as a step before every commit. The grade is advisory. Has a cheap "--citations" mode that only reconciles cited sources against what they are cited for - run that first, and for "check my citations", "did I cite that right", or between graded rounds.
+description: Review an OS/2 change before trusting it - dispatch the os2-reviewer agent for a grounded, graded (A-F) review of work touching OS/2 semantics (Dos*/Win*/Vio* APIs and ordinals, PM, VIO, drivers, the LX/NE loader, kernel objects, thunks, the 16/32-bit ABI split), with the change set, claims, evidence, populations and grade history packaged for it. Use only when the user asks - "review this OS/2 change", "grade this", "check this against IBM" - never on your own initiative, and not as a step before every commit. The bar to land is A-; from a `full` dispatch until the work lands the project is frozen, and below A- the only permitted work is os2-toolkit:os2-reviewer-reworker. Has a cheap "--citations" mode that only reconciles cited sources against what they are cited for - run that first, and for "check my citations", "did I cite that right", or between graded rounds.
 ---
 
 # Graded OS/2 review of this session's work
@@ -13,10 +13,14 @@ books - because the model is not trained on OS/2 and would otherwise grade
 against its priors; and it returns a **letter grade**, not just a list of
 findings.
 
-**The review is advice, not a gate.** Run it when the user asks for one. Its grade
-tells the user how far to trust the work; it does not decide whether the work may
-land, and it is never a reason to start another round, or new work, that the user
-did not ask for.
+**Run it when the user asks for one; once it runs, it is a gate.** The bar to land
+is A-. From a `full` dispatch until the work receives a landing grade and lands,
+**the project is frozen** (section 3), and below A- the only permitted work is
+`/os2-toolkit:os2-reviewer-reworker` closing the report's findings. The freeze
+is what prevents drift: fixing more than the findings moves the baseline, the
+reviewer's notes stop being valid, and every later round grades new work
+instead of the repair. A review is still never a reason to start another round
+the user did not ask for.
 
 The reviewer starts blind: it cannot see this conversation. That is the point,
 and it is also why the dispatch has to carry everything. "Review the changes"
@@ -43,7 +47,7 @@ most expensive habit available here.
   It is also the right answer to "is this ready?" between rounds, and to a change
   too small to justify `full` at all.
 
-- **`full`** - grounding, the whole attack order, findings and an advisory letter
+- **`full`** - grounding, the whole attack order, findings and a letter
   grade.
 
 `/os2-toolkit:os2-review --citations [paths]` selects the cheap mode; the default
@@ -88,7 +92,8 @@ paths or a revision, use that instead.
    the previous round; without this it produces a third independent list instead
    of answering the only question that matters by round two, which is *are we
    converging*. State the round number, every previous grade in order, and the
-   rubric line that set each:
+   rubric line that set each, and **attach the previous round's baseline patch
+   and report** - the reviewer diffs against that patch to find drift:
 
    > **Grade history:** round 3. Round 1: C ("a claim asserted without the
    > measurement that would settle it" x3). Round 2: C (same line, x1 - the three
@@ -120,6 +125,17 @@ is evidence the question was taken seriously.
 
 ## 3. Launch
 
+**For a `full` round, first save the baseline** - the exact work being graded:
+`git diff HEAD > <scratch>/review-round-N.patch` (or `svn diff > ...`), plus
+copies of any untracked files in the change. The reworker and any regrade's
+drift check need it; without it nobody can show the rework did not drift.
+
+**From this dispatch on, the project is FROZEN** until the work under review
+gets a landing grade (A-) and lands. Start nothing new - no features, no fixes
+beyond the reviewer's findings, no captures, no tickets. Anything you notice in
+the meantime goes on a list for the user, discussed after landing. A
+`citations` pass saves no baseline and starts no freeze.
+
 `Agent(subagent_type: "os2-reviewer", ...)`. Do not paste the persona, the attack
 order, or the rubric - the agent file carries them and is their source of record.
 The prompt is the package:
@@ -134,7 +150,8 @@ The prompt is the package:
 > **What the author claims works:** [each claim]
 > **Evidence the author relies on:** [the exact output behind each claim]
 > **Grade history:** [round N; each previous grade + the rubric line that set it;
-> what was repaired between rounds - or "round 1, no history"]
+> what was repaired between rounds; the previous round's baseline patch and
+> report - or "round 1, no history"]
 > **Populations:** [citations N, OS/2-fact comments N, ordinal rows touched N,
 > new constants N, call sites of <fn> N - as many as you counted]
 > **Exception list:** [allowlisted divergences / skipped cases / recorded
@@ -181,15 +198,23 @@ exactly what a fresh reader catches.
   premise you handed it.
 - **Report every finding to the user**, including the ones you disagree with,
   with your assessment. Never silently drop one.
+- **The project is still frozen** (section 3). Below A-, do not repair anything
+  in this session: the repair is `/os2-toolkit:os2-reviewer-reworker`, which
+  fixes **exactly and only** what the reviewer outlined, in a fresh context,
+  with a stop for the user between its analysis and its fix.
 - **Report the grade, the rubric line that set it, and the one thing the
-  reviewer said is most wrong** - then stop and let the user decide. Do not start
-  another review round, or fix findings that widen the change, unless the user
-  asks. A finding whose remedy is `design` (new mechanism, new research) is a
-  question for the user, not a task.
-- **Out-of-scope findings get recorded and left**, not fixed in this change - the
-  rubric's "fixed instead of recorded" is an automatic F. Where they belong
-  depends on the project: its issue system, its plan, or `know absent` for a
-  dead end the review closed.
+  reviewer said is most wrong.** Below A-, nothing lands. The "one thing most
+  wrong", Not tested, Could not verify, scope questions and any finding whose
+  remedy is `design` (new mechanism, new research) are questions for the user,
+  not work items.
+- **One graded round.** Below A-: rework, report, stop. A second graded round
+  runs only when the user asks for it, and only once every item in the report
+  has a disposition (fixed, or decided by the user).
+- **Out-of-scope findings are reported to the user, not fixed** - the rubric's
+  "fixed instead of recorded" is an automatic F - and not ticketed yet either.
+  Whether to ticket them (`os2-toolkit:track`), fix them, or `know absent` a dead
+  end the review closed is decided after the repaired work is re-reviewed and
+  lands.
 - **Record what the review established.** A durable OS/2 fact the reviewer had to
   source, or a search it proved empty, is worth more than the review: `know add`
   (with a `--verify` command that can fail on the contested half) and `know
