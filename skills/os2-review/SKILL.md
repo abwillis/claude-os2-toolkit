@@ -136,7 +136,7 @@ beyond the reviewer's findings, no captures, no tickets. Anything you notice in
 the meantime goes on a list for the user, discussed after landing. A
 `citations` pass saves no baseline and starts no freeze.
 
-`Agent(subagent_type: "os2-reviewer", ...)`. Do not paste the persona, the attack
+`Agent(subagent_type: "os2-toolkit:os2-reviewer", ...)`. Do not paste the persona, the attack
 order, or the rubric - the agent file carries them and is their source of record.
 The prompt is the package:
 
