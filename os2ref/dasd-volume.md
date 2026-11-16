@@ -41,6 +41,135 @@ discrepancy corrected: `DosQueryFSInfo` does **not** return the file-system type
 `PDSK_LOCKPHYSDRIVE` (0x00) / `PDSK_UNLOCKPHYSDRIVE` (0x01), `PDSK_GETPHYSDEVICEPARAMS` (0x63),
 `PDSK_READPHYSTRACK` (0x64) / `PDSK_WRITEPHYSTRACK` (0x44) / `PDSK_VERIFYPHYSTRACK` (0x65).
 
+## Direct access (DASD) handles: `DosOpen("X:", OPEN_FLAGS_DASD)` and category 8 on them
+
+Added 2026-11-01. Sources: IBM *Control Program Programming Reference* (DosOpen, DosRead, DosWrite Remarks); IBM
+*Physical Device Driver Reference* category 08h pages (the same text as the Control Program `DSK_*` pages); IBM's
+*Installable File Systems* reference ("IFS"; the text as redistributed in osFree `filesys/fat/src/ifsinf/ifs.ipf`);
+Toolkit 4.5 `bseerr.h`; DDK `base/src/dev/dasd/os2dasd/dmioctl.c`. Kernel and FSD behaviour is [OBS-RE] from the
+14.104a SMP kernel and HPFS.IFS 14.083; measurements are [OBS] as stated.
+
+### The open, and what the handle is [DOC-IBM DosOpen Remarks]
+
+- *"pszFileName is "drive:" (such as C: or A:), and represents a mounted disk or diskette volume to be opened for
+  direct access."* The Direct Open bit (`OPEN_FLAGS_DASD`, open-mode bit 15) *"provides direct access to an entire
+  disk or diskette volume, independent of the file system ... the handle represents the logical volume as a single
+  file."* The caller locks it with category 8 `DSK_LOCKDRIVE` *"to prevent other processes from accessing the
+  logical volume"*, and issues `DSK_UNLOCKDRIVE` when finished.
+- DosRead and DosWrite Remarks: *"You must lock the logical volume before accessing it ... While the logical volume
+  is locked, no other process can access it."*
+- The kernel's checks on the open [OBS-RE]: the open flags must be exactly `OPEN_ACTION_OPEN_IF_EXISTS`
+  (fail if new), else 87; a share mode is required (else 12), the access mode is not restricted; the name must be
+  exactly `X:` (or `\\.\X:`), else 3. The open takes no lock. Position and counts are in **bytes**, relative to
+  the start of the volume (sector 0 = its boot sector). A write without the lock is refused with 5 (reads are not
+  gated); a write is clamped at the volume's end; a seek beyond the end gives 25 (`ERROR_SEEK`);
+  `DosQueryFileInfo` and `DosSetFileSize` give 130 (`ERROR_DIRECT_ACCESS_HANDLE`).
+
+### What the file system driver owes [DOC-IBM IFS]
+
+- FS_OPENCREATE: *"FSDs are required to support direct access opens. These are indicated by a bit set in the
+  sffsi.sfi_mode field."* For a direct open `pcdfsi`/`pcdfsd`, `iCurDirEnd`, `usOpenFlag` and `usAttr` are invalid,
+  and `Action` and `EABuf` are invalid on return. *"On a successful return, the following fields in the sffsi
+  structure must be filled in by the file system driver: sfi_size and all the time and date fields."* *"On entry,
+  the sfi_hvpb field is filled in."*
+- FS_WRITE and FS_NEWSIZE: *"The FSD should return an error if an attempt is made to write beyond the end with a
+  direct access device handle."*
+- FS_CHGFILEPTR: *"The FSD uses the current file size or sfi_position along with offset and type to compute a new
+  sfi_position."*
+- The IFS interface has **no drive-lock entry or helper**; its only mention is *"base utilities do not lock
+  drives"* (by absence, searched for lock-drive wording). An FSD takes part in a lock only by passing category 8
+  through its FS_IOCTL to the kernel (`FSH_DOVOLIO2`), which keeps the lock itself [OBS-RE: the kernel answers 00h
+  and 01h; HPFS and JFS forward every category 8 call unchanged].
+- So a DASD open of an installable-file-system volume is answered by that volume's FSD, and so are its reads,
+  writes and seeks; the kernel's checks above sit in front of every FSD [OBS-RE].
+- **HPFS.IFS** [OBS-RE]: on a volume of fewer than 400000h sectors (2 GiB) `sfi_size` is in bytes. On a larger
+  volume it is the **sector count**, and DosRead/DosWrite answer **5** until the handle is switched to sector units
+  by `DosFSCtl` function **9014h** (routed by handle) with the 4-byte value **`0xDEADFACE`**; afterwards size,
+  position and counts are in sectors. 9014h is an FSD-defined function (8000h-BFFFh range) with no IBM page. A
+  direct write past the end gives 29 (`ERROR_WRITE_FAULT`). JFS keeps a 64-bit byte size and has no such mode
+  [DOC-IBM src, IBM's JFS release].
+
+### Category 8 functions on a DASD handle [DOC-IBM PDD category 08h; Control Program `DSK_*` pages]
+
+| Fn | Name | IBM's description / remark of note |
+|---|---|---|
+| 00h | Lock Drive | succeeds only if the handle issuing it is the one handle open on the volume; unlock before DosClose |
+| 01h | Unlock Drive | must be called before DosClose (the page's Description line says "locks the drive", a typo) |
+| 02h | Redetermine Media | rebuilds the device parameters (including the VPB), simulates a close on the current handle, and forces a mount on the volume. The caller must have the volume locked, otherwise `ERROR_LOCK_VIOLATION`. If other processes have the volume open, or the caller has it open more than once, "ERROR_DRIVE_BUSY" (see below) |
+| 03h / 21h | Set / Query Logical Map | |
+| 04h | Begin Format | parameter = the FSD name (empty = FAT); unmounts the current FSD and force-mounts the named one; sets a flag that 02h clears, so 02h must come before DosClose |
+| 20h | Block Removable | 0 removable, 1 fixed; with handle -1 a drive-unit byte, and media need not be present |
+| 22h | Reserved | |
+| 40h | Removable Media Control | |
+| 43h / 63h | Set / Query Device Parameters | 63h command byte bit 0: 0 = the recommended BPB, 1 = the BPB of the media in the drive |
+| 44h / 64h / 65h | Write / Read / Verify Logical Track | |
+| 45h | Format and Verify Track | |
+| 5Dh | Diskette Control | |
+| 5Eh, 5Fh | Reserved | |
+| 60h | Query Media Sense | |
+| 66h | Status (lock / media present) | |
+
+- The return codes IBM lists for these functions: 0, 1, 6, 15, 31, 87, 111, 115, 117, 119, 163, 165. 108, 33 and
+  142 come from the remarks and the kernel.
+- IBM's disk driver (OS2DASD) has no handler for 00h-04h, 20h or 21h in its own category 8 table [DOC-IBM DDK
+  `dmioctl.c`]: those are answered by the kernel [OBS-RE: 00h/01h lock and unlock, 02h and 04h own arms; 03h, 21h
+  and 20h are rewritten to request packet commands 13h, 12h and 0Fh; the rest go to the driver as generic IOCtl
+  command 10h].
+- **The 02h busy code's name.** IBM's 02h page says "ERROR_DRIVE_BUSY"; no such constant exists in the Toolkit.
+  The kernel returns **142, `ERROR_BUSY_DRIVE`** (`bseerr.h`) when the volume has more than one reference, and
+  **33 `ERROR_LOCK_VIOLATION`** when the caller does not hold the lock [OBS-RE].
+
+### The lock [DOC-IBM `DSK_LOCKDRIVE` / `DSK_UNLOCKDRIVE`]
+
+- Lock Drive *"is used to exclude I/O by another process on the volume in the drive. The Lock Drive function
+  succeeds only if there is one file handle open on the volume in the drive (that is, the file handle on which this
+  function is issued)."* It is issued after DosOpen and before access.
+- Unlock Drive *"releases a lock on a volume"* and *"must be called ... before closing the drive with DosClose."*
+- The parameter and data packets are one reserved byte each.
+- In the kernel [OBS-RE]: the lock owner is a process id kept per drive. Another process's lock gives **108
+  `ERROR_DRIVE_LOCKED`**; so does a volume with more than two references (other than searches) on the IOCtl
+  path. Unlock returns 0 even when the caller is not the owner. Process end releases a lock. While a volume is
+  locked, another process's access to it raises a hard error with code 108 and retries every 2 seconds.
+
+### Measured on real OS/2 [OBS]
+
+Warp Server for e-business 4.50, kernel 14.104a SMP, in a VM, 2026-11-01. C: an HPFS volume over 2 GiB (the boot
+volume), D: a 10 GB JFS volume. A 32-bit program opened `"C:"` and `"D:"` in turn and ran these calls in order:
+
+| Call | C: HPFS | D: JFS |
+|---|---|---|
+| `DosOpen` DASD, read-only, **no share mode** | 12 | 12 |
+| `DosOpen` DASD, deny-none, read-write, fail-on-error, open-if-exists | 0 | 0 |
+| `DosQueryFileInfo` / `DosSetFileSize` | 130 / 130 | 130 / 130 |
+| `DosRead` 512 bytes at 0 | **5** | 0, 512 bytes |
+| `DosSetFilePtr(FILE_END, +1)` | 25 | 25 |
+| `DosSetFilePtr(FILE_END, 0)` | 0 | **25** |
+| `DosWrite` 1 byte at 0, not locked | 5, 0 bytes | 5, 0 bytes |
+| `DosFSCtl` 9014h by handle, `0xDEADFACE` (4 bytes) in the parameter area | **0** | 1 |
+| `DosRead` at 0 of **1** (C:) / 512 (D:) | 0, **1** (one sector) | 0, 512 bytes |
+| `DosClose` | 0 | 0 |
+
+A second run on C: opened it the same way and then:
+
+| Call | C: HPFS |
+|---|---|
+| category 8 00h (Lock Drive) | **108** |
+| `DosRead` 512 | 5 |
+| `DosWrite` back at 0 | 5, 0 bytes |
+| category 8 63h, command byte 1 | 0, 512 bytes per sector |
+| category 8 01h (Unlock Drive), twice | 0, 0 |
+| `DosWrite` 1 byte | 5 |
+| `DosClose` | 0 |
+
+- The C: rows show HPFS's large-volume form: reads answer 5 until 9014h, after which a count of 1 reads one sector.
+- Lock Drive on the HPFS **boot** volume answers 108, as the two-reference rule predicts for a volume the system
+  itself has files open on [INF].
+- **Locking the JFS volume the same way traps the system**: TRAP 000e in JFS, CS:EIP `0168:F7A9577E`, CR2 `0107h`
+  on one run and `0F9E3h` on the other - reproduced twice. No output arrived before the trap, so whether the lock
+  itself or the locked read or write after it faulted is not established; the unlocked calls above run on that
+  volume.
+- Why JFS refuses a seek to exactly `FILE_END` (25) is not established.
+
 ## Volume and drive query APIs [DOC-IBM `bsedos.h` - prototypes; ordinals from IBM `os2386.lib`]
 
 Ordinals confirmed against IBM's `os2386.lib` import library (the DOSCALLS import records),
@@ -248,6 +377,7 @@ has no assumption that the boot drive is `C:`.
 ## See also
 - `boot-sequence.md` - where volumes are mounted during boot (the DASD/IFS stages).
 - `drivers.md` - the PDD / IFS (FSD) driver model that produces the VPB/DPB this doc queries.
+- `dasd-device-manager.md` - the driver-facing half: what a DASD device manager owes the kernel and IFSs.
 
 ---
 

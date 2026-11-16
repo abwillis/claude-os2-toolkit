@@ -1,7 +1,10 @@
 # OS/2 Driver ABIs - Physical Device Drivers and Installable File Systems
 
 The contracts a physical device driver (PDD) and an installable file system (FSD) present to the
-OS/2 kernel. PDDs load at boot-sequence Stage 6 (`DEVICE=`), FSDs at Stage 7 (`IFS=`).
+OS/2 kernel. `DEVICE=` PDDs and `IFS=` FSDs load in **one walk of CONFIG.SYS, interleaved in file
+order** - not as two stages [OBS-RE] (`syiInstallDeviceDrivers`; `driver-lifecycle.md` section 1.3);
+base drivers load earlier, at ring 0 (`driver-lifecycle.md` section 1.2). (Corrected 2026-10-21: this
+line previously placed PDDs at boot Stage 6 and FSDs at a separate Stage 7.)
 
 Provenance: **[DOC-IBM]** IBM DDK PDD reference book (Physical Device Driver Reference, HTML `REF/PDD`),
 IFS entry-point / FSHelper headers `fsd.h` / `fsh.h`, request-packet / device-header headers
@@ -14,7 +17,8 @@ HTML pages), the DDK headers `devhdr.h`, `reqpkt.h`, `fsd.h`, `fsh.h`, the OS/2 
 the ES:BX Strategy ABI, the request-packet header + strategy command codes, the FS_\* entry set, and
 the FSHelper family were confirmed in an IBM primary and tagged inline below. Two items could not be
 matched to a distinct IBM primary and are noted where they appear: the "DS = driver data segment" on
-Strategy entry (ES:BX confirmed, DS convention not separately located) and the remote-FSD
+Strategy entry (ES:BX confirmed, DS convention not separately located - since settled in the kernel's
+bytes, see the Strategy ABI below) and the remote-FSD
 "ERROR_NOT_SUPPORTED from FS_MOUNT" behavior (the FSA_REMOTE distinction itself is in `fsd.h`).*
 
 ## Physical Device Drivers (PDD)
@@ -59,13 +63,18 @@ Not established by this test: whether the virtual-device type (0x28000) is also 
 
 ### The Strategy routine ABI [DOC-IBM]
 The kernel calls a PDD's Strategy routine by a **far call with `ES:BX` -> a request packet** (a 16:16
-pointer), with **DS = the driver's data segment**. This is a register ABI, not a stack-frame call.
+pointer), with **`DS:SI` -> the device header**, so DS = the driver's first data segment, where IBM
+requires the header to sit. This is a register ABI, not a stack-frame call.
 
 The `ES:BX` -> request-packet convention is stated verbatim in the IBM Physical Device Driver
 Reference, "Physical Device Driver Strategy Commands": *"The physical device driver strategy routine
 is called with ES:BX pointing to the request packet"* (`REF/PDD/00100`). [DOC-IBM]  (The "DS = the
 driver's data segment on entry" part is the standard PDD register convention but was not matched to a
-distinct IBM reference page during ratification - treat that sub-clause as [OBS-RE] pending a source.)
+distinct IBM reference page during ratification. **Settled 2026-10-21** [OBS-RE]: the kernel's
+`DevIOCall` loads `DS:SI` with the device header's far pointer immediately before the far call
+(14.104a `0003:088a`; unpublished notes),
+and the header is the first item of the first data segment (PDD/00017, 00019) [DOC-IBM]; see
+`driver-lifecycle.md` section 4.3.)
 
 ### Request packet [DOC-IBM]
 The request packet opens with a fixed header - packet length, unit code, **command code**, and a
@@ -129,6 +138,9 @@ then `CALL [Device_Help]`; unless noted, success is carry-clear / return 0.
   to `ArmCtxHook` and `EBX` = `0FFFFFFFFh`; the handler must save/restore its own registers, cannot be
   preempted, and must reside in the same segment as the `AllocateCtxHook` call. `DS` = driver data
   segment on entry. Error `ERROR_INVALID_PARAMETER` (87). [DOC - EDM2 "DevHelp_AllocateCtxHook"]
+  The kernel's own behaviour differs on that error: called with `EBX` != -1 it **sets carry without
+  loading 87** into `AX` [OBS-RE] (`driver-lifecycle.md` section 6.3), so a caller testing `AX` for 87 sees
+  whatever `AX` held.
 
 **Character queue and event signalling.**
 - `DevHelp_QueueInit(NPBYTE Queue)` - initializes a character-queue structure and must be called
@@ -170,35 +182,27 @@ Resource Manager's own driver-type taxonomy (`rmbase.h`) a snooper is `DRT_SERVI
 > So: **`.SYS` was missing entirely**, **`.PDD` is really `.TSD`** (which is the LADDR Type-Specific Driver this doc already describes elsewhere), and **`.ADD` comes before `.I13`, not after**. Real order: **`.SNP` -> `.SYS` -> `.BID` -> `.VSD` -> `.TSD` -> `.ADD` -> `.I13` -> `.FLT` -> `.DMD`**. `[OBS-RE]` Prior art, and the source of the `OrderBASEDEVs` linkage this claim rests on: unpublished notes (2026-08-06), which published the same bytes and the same three corrections, and traced `DS` there as `mov ax,0x47` -> LDT index 8 -> `DOSINITDATA`, caller chain `InitBaseDDs` -> `OrderBASEDEVs`. The bytes below were re-read independently for this change; the *linkage* is that doc's.
 
 
-**The boot-time detection sequence** (DDK sample README, verbatim mechanism description):
-1. On boot, the kernel loads the Resource Manager (`RESOURCE.SYS`).
-2. The Resource Manager reads a list file (the README calls it both `SNOOP.LST` and
-   `SNOOPER.LST` in different places - not resolved which is the shipped name) out of `\OS2\BOOT\`
-   and runs each named `.SNP` in the order listed.
-3. Each snooper: (a) speculatively allocates the I/O ports/IRQ/DMA it needs to *probe* the device
-   (`RMAllocResource`), (b) determines whether the device is actually present, and (c) if found,
-   registers the detected device and permanently reserves the **real** driver's bus resources with
-   the Resource Manager (`RMCreateDetected(hDriver, &hDetected, &DetectedStruct, pResourceList)`,
-   confirmed at `pas16snp.c:749`) - so the real PDD that loads later never has to probe hardware
-   itself, and IRQ/DMA/port conflicts between legacy ISA cards are resolved before any real driver
-   touches hardware.
-4. Only after **all** listed legacy-ISA snoopers have run does the Resource Manager run the PCI
-   bus enumerator, then the ISA-PnP enumerator - snoopers are specifically for the non-enumerable
-   legacy-ISA case; PCI/PnP hardware identifies itself and needs no snooper.
+**The full account is `hardware-detection.md`** (2026-10-21): the tree `RESOURCE.SYS` builds, what
+each shipped snooper records, the snoop levels, the `PREVIOUS.DAT` format and writers, and how
+drivers read the detected tree back. In brief: the Resource Manager puts `ISAPNP.SNP`, the lines of
+`\OS2\BOOT\SNOOP.LST` (which ends with `PCIBUS.SNP`) and `PNP.SYS` at the head of the `BASEDEV=`
+list; each snooper records `DETECTEDSTRUCT` nodes under the `CURRENT` detected root with
+`RMCreateDetected`; drivers find them with `RMDevIDToHandleList`; and `RMINFO.DLL` saves them to
+`PREVIOUS.DAT` at ring 3 [OBS-RE; DOC-IBM for the structures, `rmbase.h`].
 
-**Detected-data structure and persistence.** A found device is recorded in a `DETECTEDSTRUCT`
-(`rmbase.h`): an ASCII description name, `IDType` (`RM_IDTYPE_EISA`/`_PCI`/`_LEGACY`/`_RM`),
-`DeviceID`/`FunctionID`/`CompatibleID`, an adjunct list, vendor ID, and serial number. Detection
-results can be **persisted across boots** via `RMSaveDetectedData`, which writes `PREVIOUS.DAT`;
-on a later boot, if `PREVIOUS.DAT` exists, the saved snoop values are reused instead of re-running
-every probe (`REF/PDD/00628`). The **risk level** a snooper is allowed to probe at is itself
-configurable per-boot: `RMGetSnoopLevel`/`RMSetSnoopLevel` take a `SNOOPLEVEL` enum -
-`SNP_NO_RISK`, `SNP_LOW_RISK`, `SNP_MEDIUM_RISK`, `SNP_HIGH_RISK`, `SNP_WARP_RISK` - with
-`SNP_FLG_DEFAULT`/`SNP_FLG_NEXTBOOT` flags controlling whether a level change is permanent or
-one-boot-only (`rmbase.h:743-746`); this exists because some legacy-ISA probe sequences carry a
-real risk of hanging or misconfiguring hardware that doesn't respond as expected, so the user (or
-an install program) can dial detection aggressiveness up or down. `RMVIEW.EXE /dc` is the shipped
-tool for inspecting what a boot actually detected.
+> **CORRECTED 2026-10-21 (Rule 1.7).** This section's sequence and persistence paragraphs, from the
+> DDK sample README alone, said: the list file's name was unresolved between `SNOOP.LST` and
+> `SNOOPER.LST`; the Resource Manager runs the PCI enumerator and then the ISA PnP enumerator only
+> after all listed snoopers; and when `PREVIOUS.DAT` exists the saved values are reused instead of
+> re-running every probe, with `RMVIEW /dc` showing what a boot detected. Read out of the binaries
+> instead (`hardware-detection.md` section 2, section 4): the file is `SNOOP.LST`; `ISAPNP.SNP` loads **first**
+> (it isolates then and configures later through its resident interface), `PCIBUS.SNP` is the last
+> line of `SNOOP.LST`, and `PNP.SYS` (the ROM BIOS snooper) follows; whether saved detections
+> replace probing depends on the **snoop level** in the file's first word: only at level 0 are they
+> copied into the current tree and the listed snoopers skipped, and at level 0 `RMVIEW /DC` shows
+> those restored copies, not a fresh detection. The `DETECTEDSTRUCT` fields and the `SNOOPLEVEL`
+> enum that paragraph also described were right, and are now in `hardware-detection.md` section 1 and
+> section 4.1. [OBS-RE]
 
 ### The other BASEDEV extensions: `.BID`/`.VSD`/`.TSD` are LADDR, a superseded pre-Warp storage
 driver model [DOC - online, cross-checked, no IBM DDK primary found]

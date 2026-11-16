@@ -436,8 +436,15 @@ module's entry in front of the others of its order, so the routines run **path-l
 oldest first, then `LIBPATH` modules oldest first**, "oldest" being when the module was entered in
 the chain. Termination order is therefore **not** the reverse of initialization order.
 `DosFreeModule`'s terminations, for the modules a free lets go, run in the same order.
-**Not established:** whether a module is entered in the chain before or after the modules it
-imports, so whether dependants terminate before their dependencies.
+~~**Not established:** whether a module is entered in the chain before or after the modules it
+imports, so whether dependants terminate before their dependencies.~~ **Measured [OBS], WSeB 4.50,
+kernel 14.104a SMP (OS2KRNL md5 1af21b66), 2026-10-30: dependants terminate first.** A program importing A, which imports B,
+which imports C (each `INITINSTANCE TERMINSTANCE`), is initialized C, B, A, then runs; at its exit
+the terminations run A, B, C. `DosFreeModule` of A, loaded at run time with the same chain, also
+runs A, B, C. The path/`LIBPATH` order above was measured on the same build and holds: three
+path-loaded and two `LIBPATH` modules, loaded interleaved, terminate path-loaded oldest first,
+then `LIBPATH` oldest first. A module whose initialization failed still receives its
+termination call.
 [OBS-RE - SMP kernel: `_LDRDLLExitList`, `_ldrRegisterDLLTerm`, `_ldrSetupDLLTerm`,
 `_ldrEnumDLLTerm`, `_ldrRunGraph`, `_ldrLinkMTE`, `_tkAddExitListRoutine`, `_ldrCreateMte`.]
 
@@ -634,6 +641,35 @@ disassembly - `SESMGR`'s ordinals 34/35 identify `DOSCALLS.#856`/`#857` as the k
 handle pair, each corroborating the other by adjacency. Where it is not, as with every one of
 `DOSCALL1.DLL`'s five, the target has to be identified some other way. **[OBS-RE - the shipped
 modules' entry and resident-name tables.]**
+
+### Modules that export both 16-bit and 32-bit entries [OBS-RE]
+
+An LX module's entry table records each entry's type: bundle type 1 a 16-bit entry, 2 a 286 call gate (16-bit), 3 a
+32-bit entry, 4 a forwarder. A module may mix them, so whether a given export is 16-bit or 32-bit is a property of
+that entry, read from the module itself. On OS/2 Warp 4.50 (WSeB, kernel 14.104a SMP), reading every installed LX
+DLL's entry table: **72 DLLs export both 16-bit and 32-bit entries**, among them these (16-bit / 32-bit exports,
+forwarders not counted):
+
+| Module | 16-bit | 32-bit |
+|---|---|---|
+| `PMMERGE` | 533 | 506 |
+| `PMGPI` | 294 | 343 |
+| `PMCTLS` | 33 | 254 |
+| `PMSPL` | 112 | 121 |
+| `HELPMGR` | 6 | 69 |
+| `PMVIOP` | 66 | 2 |
+| `PMPIC` | 4 | 3 |
+
+**`PMMERGE`'s names mark the 32-bit entries, not the 16-bit ones.** Its plain API names are 16-bit entries -
+`PRFQUERYPROFILESTRING` (2012), `PRFOPENPROFILE` (2017), `WINQUERYPROFILEINT` (2001), 319 such - and its 32-bit
+entries carry `32` in their names: `PRF32QUERYPROFILESTRING` (5086), `PRF32OPENPROFILE` (5080). A by-name lookup of
+`PMMERGE` with the API's name therefore finds the 16-bit form. The forwarder modules in front of it point each of
+their own ordinals at one or the other: `PMSHAPI`'s 115 and 102, for example, forward to `PMMERGE` 5086 and 5080.
+
+The Warp 4.5 Toolkit has an import library for each width, `os2286.lib` and `os2386.lib`, and both import from these
+modules; which entry an import reaches is decided by the ordinal it names, so either width of a module's API is
+reachable from one program. **[OBS-RE - the installed DLLs' entry, name and forwarder tables, read 2026-11-05; DOC-IBM
+- the Warp 4.5 Toolkit's `LIB/os2286.lib` and `os2386.lib`.]**
 
 ---
 

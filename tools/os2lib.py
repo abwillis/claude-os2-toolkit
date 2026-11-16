@@ -729,7 +729,8 @@ def cmd_convert(a):
         # the text after the book, not after the link.
         rel = os.path.relpath(f, src) if os.path.isdir(src) else os.path.basename(os.path.realpath(f))
         stem, ext = os.path.splitext(rel)
-        dst = os.path.join(out, stem + ".txt")
+        md = a.md and ext.lower() in (".inf", ".hlp")
+        dst = os.path.join(out, stem + (".md" if md else ".txt"))
         if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(f) and not a.force:
             skipped += 1
             continue
@@ -739,11 +740,12 @@ def cmd_convert(a):
             env = dict(os.environ, INF2TXT_CP=a.cp)
             tmp = dst + ".tmp"
             with open(tmp, "wb") as fh:
-                r = subprocess.run([inf2txt, f], stdout=fh, stderr=subprocess.PIPE, env=env)
+                r = subprocess.run([inf2txt] + (["--md"] if md else []) + [f], stdout=fh, stderr=subprocess.PIPE,
+                                   env=env)
             ok = r.returncode == 0 and os.path.getsize(tmp) > 0
             if ok:
                 os.replace(tmp, dst)
-                used.add("inf2txt.sh INF2TXT_CP=%s" % a.cp)
+                used.add("inf2txt.sh%s INF2TXT_CP=%s" % (" --md" if md else "", a.cp))
             else:
                 os.path.exists(tmp) and os.remove(tmp)
                 failed.append("%s: %s" % (rel, r.stderr.decode(errors="replace").strip()[-200:] or "empty output"))
@@ -920,6 +922,7 @@ def main(argv=None):
     s.set_defaults(fn=cmd_new)
     s = sp.add_parser("convert", help="convert an item's INF/HLP/PDF original into text/")
     s.add_argument("slug"); s.add_argument("--cp", default="CP850"); s.add_argument("--force", action="store_true")
+    s.add_argument("--md", action="store_true", help="INF/HLP to markdown (.md) instead of plain text")
     s.set_defaults(fn=cmd_convert)
     sp.add_parser("check", help="report problems; exit = count").set_defaults(fn=cmd_check)
     sp.add_parser("catalog", help="rebuild CATALOG.tsv").set_defaults(fn=cmd_catalog)

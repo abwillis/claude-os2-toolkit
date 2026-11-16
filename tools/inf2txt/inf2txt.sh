@@ -1,5 +1,7 @@
 #!/bin/sh
-# usage: inf2txt.sh <path-to-inf>   -> clean UTF-8 plain text on stdout
+# usage: inf2txt.sh [--md] <path-to-inf>   -> clean UTF-8 plain text on stdout
+#        --md: GitHub-flavoured markdown instead - headings from the contents levels, emphasis, inline code,
+#              preformatted blocks fenced (inf2md.awk says what maps to what)
 #
 # The IPF text inside an .INF is stored in an IBM PC code page (CP850 for the
 # OS/2 programming books; CP437 for some older material), NOT in UTF-8. Emitted
@@ -13,7 +15,9 @@
 set -e
 dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-[ $# -ge 1 ] || { echo "usage: inf2txt.sh <path-to-inf>" >&2; exit 2; }
+md=
+[ "$1" = "--md" ] && { md=1; shift; }
+[ $# -ge 1 ] || { echo "usage: inf2txt.sh [--md] <path-to-inf>" >&2; exit 2; }
 [ -r "$1" ]  || { echo "inf2txt.sh: cannot read '$1'" >&2; exit 2; }
 # The binary is built per user (build.sh / inf2txt-build) into $INF2TXT_HOME;
 # a build left beside this script by an older checkout is still honoured.
@@ -46,8 +50,26 @@ fi
 # `file` call the output data and GNU grep treat it as binary -- the same silent
 # empty-result failure the transcode above exists to prevent -- and they are not
 # characters any reader wants. Dropped here; tab, newline and CR are kept.
+if [ -n "$md" ]; then
+    # The markdown mode needs the topic levels (`inf2txt -l`, from a build of this checkout's inf2txt.pas).
+    "$bin" -l "$1" | head -1 | grep -q '^===[0-9]*=== ' || {
+        echo "inf2txt.sh: --md needs an inf2txt built with -l - rerun inf2txt-build (or $dir/build.sh)" >&2
+        exit 127
+    }
+    "$bin" -l "$1" \
+     | LC_ALL=C awk -f "$dir/inf2md.awk" \
+     | tr -d '\000-\010\013\014\016-\037' \
+     | sed -E 's/[ \t]+$//' \
+     | cat -s \
+     | $conv
+    exit 0
+fi
+
+# Tags are stripped, but IPF text escapes a literal "<" as "<<" and ">" as ">>" (fpGUI RichTextDocumentUnit.pas,
+# the "<"/">" arms of its element scanner): "#include <<netcons.h>>" must come out as "#include <netcons.h>", not
+# be eaten as a tag. "<<" is parked as \001 while the tags go, then restored.
 "$bin" "$1" \
- | sed -E 's/<[^>]*>//g' \
+ | sed -E 's/<</\x01/g; s/<[^<>]*>//g; s/\x01/</g; s/>>/>/g' \
  | tr -d '\000-\010\013\014\016-\037' \
  | sed -E 's/[ \t]+$//' \
  | cat -s \

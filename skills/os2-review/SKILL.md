@@ -1,6 +1,6 @@
 ---
 name: os2-review
-description: Review an OS/2 change before trusting it - dispatch the os2-reviewer agent for a grounded, graded (A-F) review of work touching OS/2 semantics (Dos*/Win*/Vio* APIs and ordinals, PM, VIO, drivers, the LX/NE loader, kernel objects, thunks, the 16/32-bit ABI split), with the change set, claims, evidence, populations and grade history packaged for it. Use only when the user asks - "review this OS/2 change", "grade this", "check this against IBM" - never on your own initiative, and not as a step before every commit. The grade is advisory. Has a cheap "--citations" mode that only reconciles cited sources against what they are cited for - run that first, and for "check my citations", "did I cite that right", or between graded rounds.
+description: Review an OS/2 change before trusting it - dispatch the os2-reviewer agent for a grounded, graded (A-F) review of work touching OS/2 semantics (Dos*/Win*/Vio* APIs and ordinals, PM, VIO, drivers, the LX/NE loader, kernel objects, thunks, the 16/32-bit ABI split), with the change set, claims, evidence, populations and grade history packaged for it. Use only when the user asks - "review this OS/2 change", "grade this", "check this against IBM" - never on your own initiative, and not as a step before every commit. The bar to land is A-; from a `full` dispatch until the work lands the project is frozen, and below A- the only permitted work is os2-toolkit:os2-reviewer-reworker. Has a cheap "--citations" mode that only reconciles cited sources against what they are cited for - run that first, and for "check my citations", "did I cite that right" - and a "--regrade" mode, the only re-review of a rework: it checks the findings closed and the hunks mapped, and never re-samples the work.
 ---
 
 # Graded OS/2 review of this session's work
@@ -13,10 +13,39 @@ books - because the model is not trained on OS/2 and would otherwise grade
 against its priors; and it returns a **letter grade**, not just a list of
 findings.
 
-**The review is advice, not a gate.** Run it when the user asks for one. Its grade
-tells the user how far to trust the work; it does not decide whether the work may
-land, and it is never a reason to start another round, or new work, that the user
-did not ask for.
+**Run it when the user asks for one; once it runs, it is a gate.** The bar to land
+is A-. From a `full` dispatch until the work receives a landing grade and lands,
+**the project is frozen** (section 3), and below A- the only permitted work is
+`/os2-toolkit:os2-reviewer-reworker` closing the report's findings. The freeze
+is what prevents drift: fixing more than the findings moves the baseline, the
+reviewer's notes stop being valid, and every later round grades new work
+instead of the repair. A review is still never a reason to start another round
+the user did not ask for.
+
+**The cycle, and why it converges by construction:**
+
+```
+readiness check -> full review -> rework (in-scope findings only) -> optional regrade -> land
+```
+
+A `full` report is the reviewer's whole judgement of what is wrong with the work
+it covered. A rework that closes exactly those findings, and changes nothing
+else, has carried that judgement out - so a `regrade` of it can only confirm,
+and comes out A- unless a fix is itself wrong. Two things break this, and both
+are rules below: **new design entering the cycle** (a design draft sent for
+review, a user's design ruling built into the rework, a new idea folded in
+during the freeze), and **a second `full` round on the same material**, which
+samples what the first left unopened and so always finds something. Design
+rulings go into the *next* cycle; the re-review of a rework is a `regrade`, not
+a `full` round.
+
+> **Receipt.** A design spec went to `full` review with its own open-questions
+> table; round 1 graded C+ with ten design findings. The author answered them
+> with seven new design rulings, some of them new ideas raised during the
+> freeze, and the spec grew by 60%. Round 2 - a `full` round - graded what was
+> nearly a new document B, three of its findings coming from the new rulings'
+> own text. The author then offered a third round instead of asking why the
+> second had not come out A-.
 
 The reviewer starts blind: it cannot see this conversation. That is the point,
 and it is also why the dispatch has to carry everything. "Review the changes"
@@ -24,7 +53,7 @@ gets you a generic style report; the grade is only as good as the package.
 
 ## 0. Pick the mode - the cheap one first, and often instead
 
-The agent has two modes and the dispatch names one. **A `full` round costs
+The agent has three modes and the dispatch names one. **A `full` round costs
 roughly twenty times a `citations` round**, so choosing `full` by reflex is the
 most expensive habit available here.
 
@@ -43,11 +72,39 @@ most expensive habit available here.
   It is also the right answer to "is this ready?" between rounds, and to a change
   too small to justify `full` at all.
 
-- **`full`** - grounding, the whole attack order, findings and an advisory letter
-  grade.
+- **`full`** - grounding, the whole attack order, findings and a letter
+  grade. Once per cycle: it grades new work, never a rework of work it already
+  graded.
 
-`/os2-toolkit:os2-review --citations [paths]` selects the cheap mode; the default
-is `full`.
+- **`regrade`** - the re-review of a rework, and the only one. Given the `full`
+  report, its baseline patch and the reworker's hunk map, it checks that each
+  finding is closed, that every hunk maps to a finding, and that the changed
+  hunks are themselves right - and nothing else: it does not reopen the `full`
+  round's unopened items or attack unchanged text. Its grade is A- over the
+  `full` round's coverage when every finding is closed with no drift and no
+  defect in the fixes. Far cheaper than `full`, and optional: a rework the
+  author has hunk-checked against the findings may land on the user's word
+  without it.
+
+`/os2-toolkit:os2-review --citations [paths]` selects the cheap mode,
+`--regrade` the re-review; the default is `full`.
+
+## 0a. Readiness - is this work settled enough to grade?
+
+Before a `full` dispatch, read the work for **open design questions**: an
+open-questions table, "not decided", "to be decided", alternatives left
+standing, a mechanism named but not chosen. A grading review of unsettled
+design can only report that it is unsettled, and every such finding has a
+`design` remedy - which the rework cannot build without breaking the cycle.
+
+- **Open design inside the work:** it is not ready. Settle it with the user
+  first, or mark each open question explicitly out of the review's scope ("open:
+  not graded") in the dispatch.
+- **If a `full` report comes back with its `[BEHAVIOUR]` findings mostly
+  `design`:** the work was not ready. Tell the user, and propose withdrawing the
+  review - no rework, no regrade; the design goes to the user, and the settled
+  work gets a fresh round 1. Reworking a design draft into a design is exactly
+  the redesign the freeze forbids.
 
 ## 1. Gather the change set - detect the VCS, do not assume one
 
@@ -88,7 +145,8 @@ paths or a revision, use that instead.
    the previous round; without this it produces a third independent list instead
    of answering the only question that matters by round two, which is *are we
    converging*. State the round number, every previous grade in order, and the
-   rubric line that set each:
+   rubric line that set each, and **attach the previous round's baseline patch
+   and report** - the reviewer diffs against that patch to find drift:
 
    > **Grade history:** round 3. Round 1: C ("a claim asserted without the
    > measurement that would settle it" x3). Round 2: C (same line, x1 - the three
@@ -99,7 +157,8 @@ paths or a revision, use that instead.
    repairs addressed the symptoms the reviewer happened to name while the thing
    generating them kept running. The agent's **Trajectory** section exists to
    name that mechanism, and it cannot run without this field. On round 1, say
-   "round 1, no history".
+   "round 1, no history". **For a `regrade`, also attach the reworker's Phase B
+   hunk map** - the regrade checks each hunk against it.
 5. **The populations you know of** - the denominators the reviewer will otherwise
    have to guess: how many citations the change contains, how many comments
    assert an OS/2 fact, how many ordinal or dispatch-table rows were touched, how
@@ -120,13 +179,34 @@ is evidence the question was taken seriously.
 
 ## 3. Launch
 
-`Agent(subagent_type: "os2-reviewer", ...)`. Do not paste the persona, the attack
+**For a `full` round, first save the baseline** - the exact work being graded:
+`git diff HEAD > <scratch>/review-round-N.patch` (or `svn diff > ...`), plus
+copies of any untracked files in the change. The reworker and any regrade's
+drift check need it; without it nobody can show the rework did not drift.
+
+**From this dispatch on, the project is FROZEN** until the work under review
+gets a landing grade (A-) and lands. Start nothing new - no features, no fixes
+beyond the reviewer's findings, no captures, no tickets. Anything you notice in
+the meantime goes on a list for the user, discussed after landing. A
+`citations` pass saves no baseline and starts no freeze.
+
+- **Any edit to the reviewed files outside the reworker voids the review** -
+  including the author's own "small" fixes. The regrade's hunk-map check catches
+  it; do not make it necessary.
+- **New design during the freeze - including the user's.** When the user opens a
+  new idea or design question on the frozen work, it is not a fix, however
+  closely it touches a finding. Say so, and offer exactly two paths: **park it**
+  on the after-landing list, or **withdraw the review** and treat the work as a
+  draft again (a fresh round 1 later). Never fold it into the rework: that is how
+  a repair becomes a redesign without anyone deciding it should.
+
+`Agent(subagent_type: "os2-toolkit:os2-reviewer", ...)`. Do not paste the persona, the attack
 order, or the rubric - the agent file carries them and is their source of record.
 The prompt is the package:
 
 > Review and grade the following work. You have none of the author's context.
 >
-> **Mode:** full | citations
+> **Mode:** full | citations | regrade
 > **OS/2 subjects:** [ordinals / APIs / structures / subsystems, IBM spelling]
 > **VCS and change set:** [git or svn, the exact command that shows the change,
 > and the paths; note untracked files]
@@ -134,7 +214,8 @@ The prompt is the package:
 > **What the author claims works:** [each claim]
 > **Evidence the author relies on:** [the exact output behind each claim]
 > **Grade history:** [round N; each previous grade + the rubric line that set it;
-> what was repaired between rounds - or "round 1, no history"]
+> what was repaired between rounds; the previous round's baseline patch and
+> report - or "round 1, no history"]
 > **Populations:** [citations N, OS/2-fact comments N, ordinal rows touched N,
 > new constants N, call sites of <fn> N - as many as you counted]
 > **Exception list:** [allowlisted divergences / skipped cases / recorded
@@ -160,10 +241,13 @@ exactly what a fresh reader catches.
   different results with the same finding count. A dimension marked
   `exhausted (n/n)` is closed - you can stop working on it, which is the only way
   a good grade is ever earned rather than sampled into. A dimension that is not
-  exhausted comes with the unopened items named: those are the next round's
-  starting point, and **feeding them back in the next dispatch is how three
-  rounds stop re-sampling the same population.** A report with no Coverage
-  section is a report of unknown size - send it back.
+  exhausted comes with the unopened items named: the grade covers what was
+  opened, and the unopened items are the starting point of the **next cycle's**
+  `full` review - never of this cycle's regrade, which would turn the repair's
+  check into a new sample. If the coverage is too thin to trust the grade, say so
+  to the user now; the remedy is a wider `full` round before any rework, not a
+  second one after it. A report with no Coverage section is a report of unknown
+  size - send it back.
 - **On round two and later, read Trajectory before the findings.** If it names a
   mechanism, that is the thing to repair; repairing the individual findings under
   a flat grade buys exactly one round. If it says "no history supplied", the
@@ -181,15 +265,30 @@ exactly what a fresh reader catches.
   premise you handed it.
 - **Report every finding to the user**, including the ones you disagree with,
   with your assessment. Never silently drop one.
+- **The project is still frozen** (section 3). Below A-, do not repair anything
+  in this session: the repair is `/os2-toolkit:os2-reviewer-reworker`, which
+  fixes **exactly and only** what the reviewer outlined, in a fresh context,
+  with a stop for the user between its analysis and its fix.
 - **Report the grade, the rubric line that set it, and the one thing the
-  reviewer said is most wrong** - then stop and let the user decide. Do not start
-  another review round, or fix findings that widen the change, unless the user
-  asks. A finding whose remedy is `design` (new mechanism, new research) is a
-  question for the user, not a task.
-- **Out-of-scope findings get recorded and left**, not fixed in this change - the
-  rubric's "fixed instead of recorded" is an automatic F. Where they belong
-  depends on the project: its issue system, its plan, or `know absent` for a
-  dead end the review closed.
+  reviewer said is most wrong.** Below A-, nothing lands. The "one thing most
+  wrong", Not tested, Could not verify, scope questions and any finding whose
+  remedy is `design` (new mechanism, new research) are questions for the user,
+  not work items. A `design` finding is closed in this cycle by **marking it
+  open** in the work; the user's answer to it is built and reviewed in the next
+  cycle (section 0a, the reworker's Phase B).
+- **One `full` round per cycle.** Below A-: rework, report, stop. The re-review,
+  if the user wants one, is a **`regrade`** (section 0), run only once every item
+  in the report has a disposition (fixed, marked open, or decided by the user).
+  If the hunk check already shows every finding closed and nothing else
+  changed, ask the user whether to land rather than offering a regrade by
+  reflex. A regrade below A- names the fix that is wrong or the finding not
+  closed; that goes back to the reworker - never a fresh `full` round on the
+  same material.
+- **Out-of-scope findings are reported to the user, not fixed** - the rubric's
+  "fixed instead of recorded" is an automatic F - and not ticketed yet either.
+  Whether to ticket them (`os2-toolkit:track`), fix them, or `know absent` a dead
+  end the review closed is decided after the repaired work is re-reviewed and
+  lands.
 - **Record what the review established.** A durable OS/2 fact the reviewer had to
   source, or a search it proved empty, is worth more than the review: `know add`
   (with a `--verify` command that can fail on the contested half) and `know

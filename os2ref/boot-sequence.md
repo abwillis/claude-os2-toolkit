@@ -50,13 +50,15 @@ virtual device drivers (`vbios.sys`, `vdma.sys`, `vpic.sys`, `vflpy.sys`, `vtime
 the **OS2LDR image** as two parallel `01`/`02` variants (observed in both the UNI and SMP loader
 builds, at build-specific offsets); of the four base-driver filenames only `RESOURCE.SYS` also
 appears in the kernel, beside the BASEDEV extension-priority table.
-[INF] **Which component loads them, and what selects the `01` vs `02` variant, are not
-established** - `RESOURCE.SYS` is a `.SNP`-class BASEDEV (the earliest-loading class), which
-points at the kernel's own BASEDEV machinery, while the other three appear only in the loader;
-the `01`/`02` split is presumed ISA vs. ABIOS from the drivers' own source, not from any observed
-selection code. What *is* observed is the outcome: `SCREEN$`/`SCREENDD$`/`KBD$`/`CLOCK$`/`RESMGR$`
-exist before any CONFIG.SYS driver category is processed. Full breakdown, both candidate load
-models, and the boot-to-PM video ownership timeline -> `video-stack.md` section 1.
+**The kernel loads them, and the loader's answer selects the variant** [OBS-RE]. The kernel's
+`InitBaseList` calls the loader helper `DosHlpBaseDDList` with `AL` = 1 if ABIOS is present, else 0
+(IBM's names: `BASEDD_PS2` / `BASEDD_AT`, DDK `base/inc/doshlp.inc:201-202` [DOC-IBM]); the loader
+returns the `02` (PS/2) or `01` (AT) list, plus the VDD list, and the kernel loads and INITs each
+listed driver at ring 0 before any `BASEDEV=` line; a failure here stops the boot. Details:
+`driver-lifecycle.md` section 1.2. (Corrected 2026-10-21: this paragraph previously recorded both
+questions as not established.) What *is* observed is the outcome: `SCREEN$`/`KBD$`/`CLOCK$`/`RESMGR$`
+exist before any CONFIG.SYS driver category is processed. Full breakdown of the lists, how they
+load, and the boot-to-PM video ownership timeline -> `video-stack.md` section 1.
 
 ## Stage 2 - Kernel initialization
 

@@ -106,6 +106,11 @@ Find the row that matches what you are doing and load only those docs.
 | `/dev/tty` opens and `isatty()` says yes, but reads fail | `klibc-runtime-glue.md` section 9.3 |
 | Rebuilding an installed OS/2 package to patch it (SRPM -> autoconf on OS/2 -> private-DLL test) | `../recipes/rebuild-a-netlabs-package.md` |
 | Writing a device driver or IFS | `drivers.md` (+ `kernel-services.md` for DevHlp) |
+| How the kernel loads, INITs, calls and shuts down a driver; DevHlp dispatch, IRQs, KEE | `driver-lifecycle.md` |
+| Writing a DASD device manager (DMD): Strategy-1/2, drive letters, IORBs to ADDs | `dasd-device-manager.md` |
+| Hardware detection: snoopers, the Resource Manager's trees, `PREVIOUS.DAT` | `hardware-detection.md` |
+| The system error log: `LOG.SYS`, `LOGDAEM`, `LogAddEntries`/`DosLogEntry` | `error-log.md` |
+| What a cell of `DOSCALL1.DLL`'s data objects holds, who writes it, what locks it | `doscall1-data-objects.md` |
 | 16<->32-bit thunking | `thunking.md` |
 | Inspecting an LX/NE binary, fixups, page layout | `executable-formats.md` |
 | Understanding boot order or where a subsystem fits | `boot-sequence.md` |
@@ -131,9 +136,15 @@ the LIS form follows the kernel *variant*, not the CPU count.
   - `memory-model.md` - arenas and selectors
   - `kernel-services.md` - DevHlp and the DOSCALLS surface
   - `dasd-volume.md` - disk IOCtl categories, volume/drive query, VPB/DPB
+  - `dasd-device-manager.md` - the DMD contract: Strategy-1/2, INIT units, 22h letters, IORBs to ADDs
   - `config-and-environment.md` - CONFIG.SYS processing, the environment block, NLS
   - `session-manager.md` - sessions / screen groups
+  - `doscall1-data-objects.md` - `DOSCALL1.DLL`'s data objects 5-11: every cell, its meaning,
+    users, exports and locking
   - `drivers.md` - physical-device-driver and installable-file-system ABIs
+  - `driver-lifecycle.md` - how the kernel loads, initialises, calls and shuts down its drivers
+  - `hardware-detection.md` - snoopers, the Resource Manager's trees, snoop levels and `PREVIOUS.DAT`
+  - `error-log.md` - the error-log service: `LOG.SYS`, `LOGDAEM`, the writer, the `Log*`/`DosLog*` calls and what they answer
   - `pm-graphics.md` - the Presentation Manager graphics path
   - `message-queue.md` - the PM message queue and its kernel wake
   - `thunking.md` - 16<->32-bit thunking

@@ -59,7 +59,7 @@ equivalent cell string exists anywhere in the kernel's decompressed objects, so 
 signature is loader-drawn. Corroborated by firsthand observation of real boots: the blocks +
 "OS/2" appear top-left immediately, before any kernel output.]
 
-### 1.2 The implicit base-driver lists - the lists are [OBS-RE] byte-exact; how they load is [INF]
+### 1.2 The implicit base-driver lists - [OBS-RE]: the lists, who loads them and what selects them
 
 **OS2LDR holds a list of base device drivers that no CONFIG.SYS line names.** In the
 WSeB-vintage SMP loader (`os2ldr_smp`) two parallel lists sit at file offset `0xB236`, each entry
@@ -82,44 +82,32 @@ vcmos.sys, vnpx.sys`. (Optional VDDs - `VSVGA.SYS`, `VMOUSE.SYS`, `VCOM.SYS` ...
 CONFIG.SYS `DEVICE=` line names; this baseline set is not.)
 
 Selection between list 1 and list 2 is by machine type: the `01` drivers serve ISA/AT-class
-machines, the `02` drivers ABIOS (PS/2 MCA-class) machines. [INF from the pairing plus the
-drivers' own source: `screen02.asm` implements the "Passthru to Video ABIOS" IOCtl
-(`DevHlp_ABIOSCall`) that `screen01.asm` does not - [DOC-IBM] IBM DDK
-`video/src/video/screendd/screen01.asm`/`screen02.asm`.] Machine-identification strings
+machines, the `02` drivers ABIOS (PS/2 MCA-class) machines. IBM names the selector values
+`BASEDD_AT EQU 0` and `BASEDD_PS2 EQU 1` (DDK `base/inc/doshlp.inc:201-202`) [DOC-IBM]; the
+loader's `BaseDDList` handler returns list 1 for `AL = 0` and list 2 for `AL = 1`, and for
+`AL = 1` also sets its "ABIOS present" configuration bit [OBS-RE] (Warp 4.5 SMP debug `OS2LDR`,
+14.104a build, loader offset `2f3a`). The drivers' own source agrees: `screen02.asm` implements
+the "Passthru to Video ABIOS" IOCtl (`DevHlp_ABIOSCall`) that `screen01.asm` does not
+([DOC-IBM] IBM DDK `video/src/video/screendd/screen01.asm`/`screen02.asm`). Machine-identification strings
 (`EISA`, `COMPAQ`, ...) sit immediately before the lists in the same loader data region. [OBS-RE]
 
-**How these files actually get loaded is NOT established - two mechanisms are in evidence, and
-at least one driver clearly belongs to the second.** [INF, flagged rather than resolved
-2026-08-16 after an adversarial review; an earlier revision asserted only model A.]
-
-- **Model A** - OS2LDR (the only component with filesystem access this early) reads the files,
-  and the kernel INITs them during its own initialization, *before* CONFIG.SYS's `BASEDEV=`/
-  `DEVICE=` categories. Evidence: the filename lists are in the loader image and nowhere in the
-  kernel (for three of the four).
-- **Model B** - the drivers are entries in the kernel's own BASEDEV list, loaded by the traced
-  BASEDEV machinery (`InitBaseList` -> `OrderBASEDEVs` -> `InitBASEDEVs` -> `BaseDevLoad`/
-  `BaseDevInit`), ordered by the extension-priority table `.SNP.SYS.BID.VSD.TSD.ADD.I13.FLT.DMD`.
-  Evidence: `RESOURCE.SYS` is a **`.SNP`-class BASEDEV - the earliest-loading class of all** -
-  and its filename sits in the kernel's own data immediately after that priority table.
-  Prior art on the priority table itself, cross-referenced 2026-08-29 because this doc reaches
-  its conclusion through `OrderBASEDEVs` and did not say where that linkage is established:
-  unpublished notes (2026-08-06) publishes the same
-  bytes and traces `DS` there as `mov ax,0x47` -> LDT index 8 -> `DOSINITDATA`, caller chain
-  `InitBaseDDs` -> `OrderBASEDEVs`. This doc's own reading of the string is independent
-  ([OBS-RE], Sources below); the cross-reference is prior art, not this claim's provenance.
-
-The two are not mutually exclusive and the honest reading is probably **both, per driver**:
-`RESOURCE.SYS` fits model B on direct evidence, while `CLOCK0x`/`SCREEN0x`/`KBDBASE` appear only
-in the loader. What is *observed* either way, and all this doc relies on downstream, is that the
-devices these drivers register (`RESMGR$`/`CLOCK$`/`SCREEN$`/`SCREENDD$`/`KBD$`) exist before
-CONFIG.SYS's own driver categories are processed. Settling A vs. B means tracing `InitBaseList`'s
-population source - untraced.
+**How they load: the kernel loads them, at ring 0, before `BASEDEV=`** [OBS-RE] (14.104a SMP;
+unpublished notes). The kernel's `InitBaseList` calls the
+loader helper `DosHlpBaseDDList` with `AL` = 1 if ABIOS is present, else 0, gets back the
+selected base list (`ES:DI`) and the VDD list (`ES:SI`, kept for DOS-session start), and loads
+and INITs each base driver in list order, ahead of `OrderBASEDEVs` and every `BASEDEV=` line; an
+INIT failure here stops the boot. `RESOURCE.SYS`'s second appearance, beside the kernel's
+extension-priority table `.SNP.SYS.BID.VSD.TSD.ADD.I13.FLT.DMD`, recorded in unpublished notes, was not traced; the base list
+the kernel walks comes from the loader helper either way. (Corrected 2026-10-21: earlier revisions left this open between two candidate
+models - the loader reading the files versus the kernel's BASEDEV machinery; the kernel reads
+them, through its own loader, from the list the loader helper returns.) Full detail:
+`driver-lifecycle.md` section 1.2.
 
 | File | Device(s) | Role |
 |---|---|---|
 | `RESOURCE.SYS` | `RESMGR$` | Resource Manager (also named as a literal string inside `os2krnl` itself - [OBS-RE] kernel object 8) |
 | `CLOCK0x.SYS` | `CLOCK$` | system clock; holds the GIS read/write selector via `GetDOSVar` |
-| `SCREEN0x.SYS` | `SCREEN$` (one header; ~~`SCREENDD$`~~ corrected 2026-10-14: IBM's `bsedev.h` defines `SCREENDD_NAME` as `"SCREEN$"`, and `screen01.asm`/`screen02.asm` declare a single header) | physical-video-memory selector/mapping services + SVGA info/bank/linear-access + ABIOS mode-set passthrough (see section 3) |
+| `SCREEN0x.SYS` | `SCREEN$` (one header: IBM's `bsedev.h` defines `SCREENDD_NAME` as `"SCREEN$"`, and `screen01.asm`/`screen02.asm` declare a single header) | physical-video-memory selector/mapping services + SVGA info/bank/linear-access + ABIOS mode-set passthrough (see section 3) |
 | `KBDBASE.SYS` | `KBD$` | base keyboard driver: scan conversion, per-session KIBs, **and the session-switch hotkey classifier** (section 6.4) |
 
 `KBD$`, `CLOCK$` and the BASEDEV extension-priority string `.SNP.SYS.BID.VSD.TSD.ADD.I13.FLT.DMD`
@@ -483,11 +471,12 @@ go through `syiDisplayMessageR3`, was not read.]
 
 ---
 
-## 3. The screen driver: `SCREEN01/02.SYS` (`SCREEN$` / `SCREENDD$`)
+## 3. The screen driver: `SCREEN01/02.SYS` (`SCREEN$`)
 
 *(2026-10-14: "SCREENDD" is IBM's name for this driver, not a second device name. The one device it
 registers is `SCREEN$`: DDK `bsedev.h` defines `SCREENDD_NAME` as `"SCREEN$"`, and `screen01.asm`
-declares a single header. Where this section writes `SCREENDD$`, read it as `SCREEN$`.)*
+declares a single header. Corrected 2026-10-21: this section used to write `SCREENDD$` as though it
+were a second device.)*
 
 One driver, two IOCtl categories ([DOC-IBM] IBM DDK `video/src/video/screendd/` - full breakdown
 with the vendor bank tables, `DevHlp_VMProcessToGlobal` global-access mechanism, and the ABIOS
@@ -504,7 +493,7 @@ passthrough in a dedicated reference; summary here for stack position only):
   the base video handler, which exports IOPL hardware entry points (`ACCESSHARDWARE`,
   `ACCESSREGISTER`, `SETMAPMASK`, ... - `[DOC-IBM]` `vdh/vdhvga.def`) and loads its own mode and
   font registers (`SETHWMODE` -> `SETHWFONT`, section 2.1.1). `[DOC-IBM]` + `[OBS-RE]`]
-- **Category 0x80 (`SCREENDD$`)** - the SVGA extension: chipset/VRAM identification, bank
+- **Category 0x80 (`SCREEN$`)** - the SVGA extension: chipset/VRAM identification, bank
   switching through per-vendor tables, `GetLinearAccess` (linear mapping of a physical range -
   the preferred, no-banking path), `GetGlobalAccess`/`FreeGlobalAccess`
   (`DevHlp_VMProcessToGlobal` - the primitive behind per-process apertures onto one physical
@@ -534,9 +523,9 @@ it, and OS/2 provides four:
 | view | mechanism | primary user |
 |---|---|---|
 | the `A0000-BFFFF` real-mode aperture | the VGA/EGA window: planar addressing through the sequencer/graphics-controller latches, plus a **bank register** when VRAM exceeds the window | full-screen VIO handlers, `VioGetPhysBuf` callers, VDMs |
-| a linear aperture | `SCREENDD$` `GetLinearAccess` (fn 0x0B) - linear mapping of a physical range, which is the path that avoids bank switching; PM reaches it as `VHMapVRAM` | the PM display-driver chain |
+| a linear aperture | `SCREEN$` `GetLinearAccess` (fn 0x0B) - linear mapping of a physical range, which is the path that avoids bank switching; PM reaches it as `VHMapVRAM` | the PM display-driver chain |
 | a ring-3 16:16 selector onto a physical range | `SCREEN$` category 3, `DevHlp_PhysToUVirt` | anything needing a far pointer at video memory |
-| a per-process aperture | `SCREENDD$` `GetGlobalAccess`/`FreeGlobalAccess` = `DevHlp_VMProcessToGlobal` | each PM process's own mapping onto the one VRAM |
+| a per-process aperture | `SCREEN$` `GetGlobalAccess`/`FreeGlobalAccess` = `DevHlp_VMProcessToGlobal` | each PM process's own mapping onto the one VRAM |
 
 [DOC-IBM] IBM DDK `video/src/video/screendd/`: the category-0x80 function numbers
 (`GetLinearAccess` 0x0B, `GetGlobalAccess` 0x0C, `FreeGlobalAccess` 0x0D) at
@@ -2047,7 +2036,7 @@ BIOS text mode 3
   |          them is not established, section 1.2 models A/B `[INF]`]
   | kernel init: (logo? dologo two-gate check -> mode 0x12 -> restore) [section 2]
   |         Alt-F1/boot keys: BIOS-level text UI              [section 2.2]
-  |         base drivers INIT -> SCREEN$/SCREENDD$/KBD$/CLOCK$ exist [section 1.2/section 3]
+  |         base drivers INIT -> SCREEN$/KBD$/CLOCK$ exist [section 1.2/section 3]
   |         ~~base DLLs incl. DOSCALL1 (BVS inside) + BVSCALLS forwarder [section 1.3]~~
   |         [2026-10-01: DOSCALL1 (BVS inside) is loaded into the SYSINIT
   |          process (pid 1) by the kernel's ring-3 init, before DEVICE=
@@ -2085,8 +2074,8 @@ Also see `boot-sequence.md` Stage 5a.]
 
 ## Sources
 
-- **[DOC-IBM]** IBM DDK: `video/src/video/screendd/screen01.asm`, `screen02.asm` (SCREEN$/
-  SCREENDD$); `video/src/video/svdh/bvhmain.c` + siblings (the SVDH chained BVH - DevEnable/CVT/
+- **[DOC-IBM]** IBM DDK: `video/src/video/screendd/screen01.asm`, `screen02.asm`
+  (SCREEN$); `video/src/video/svdh/bvhmain.c` + siblings (the SVDH chained BVH - DevEnable/CVT/
   InitEnv/SaveEnv/RestoreEnv contract); `video/src/video/pmvideo/xgabvh20/` (XGA BVH);
   `base/inc/bvscb.inc`/`bvsequ.inc`/`bvsparms.inc` (BVS control blocks);
   `video/src/video/vdh/vdh.h` (the BVHVGA-family handler header - CVT function codes,
