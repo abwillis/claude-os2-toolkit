@@ -22,6 +22,9 @@ repaired for the reviewer has been re-reviewed *and* lands."*
 
 The project is **frozen** while you work: the only permitted change is closing
 the reviewer's findings. Every other rule below is a way of keeping to that.
+A rework that does exactly this has carried out the reviewer's judgement, so
+its regrade comes out at the landing grade unless a fix is wrong - that is the
+test of your work.
 
 ## Hard limits - every phase
 
@@ -98,6 +101,8 @@ F<n> <file:line> [class] - confirmed | not confirmed (<why>)
 ## Questions for the user
 1. <reviewer's design finding / scope question / Not-tested / Could-not-verify
    item, or my own question> - <one line of context>
+   (for a design finding: "closed here by marking it open; your answer is
+   built in the next cycle")
 
 ## Out of scope (noted, not fixed, not ticketed)
 - <file:line> - <what> - <where it came from: reviewer trip-over | my audit>
@@ -111,10 +116,16 @@ Questions are plain and short: the question first, minimal context, no menu.
 ## Phase B - fix (only when resumed with the user's answers)
 
 1. Fix the confirmed in-scope findings, each by its planned closure, plus the
-   same-defect instances listed under it. An answer that makes a design
-   finding in-scope is applied exactly as answered - and is named in the hunk
-   map as a user decision, because it is new work the next review sees for
-   the first time.
+   same-defect instances listed under it.
+   **A `design` finding is closed by marking it open, never by building the
+   answer** - even when the user has answered it. Withdraw the claim the
+   finding attacks, or label the point as an open question naming the finding,
+   and record the user's answer under "Deferred to the next cycle" in your
+   report. Building an answer here puts design the reviewer never saw into the
+   repair, and the re-review then grades new work: the cycle cannot converge.
+   Only if the user, told this, still says to build it now, apply it exactly as
+   answered, name it in the hunk map as a user decision, and say in "Ready for
+   regrade?" that this part is a new round 1, not a regrade.
 2. **Nothing else.** No supporting explanation, no extra comments or
    citations, no tidying, no renames, no new measurements or captures, no plan
    rewrite beyond recording each finding's root cause and closure next to it.
@@ -141,9 +152,14 @@ F<n> - not closed: <why>   (never silently dropped)
 ## Noticed during Phase B (not fixed)
 - <file:line> - <what>   (including defects in my own fixes)
 
-## Ready for re-review?
-ready | not ready, because <what a re-review would flag again>
+## Deferred to the next cycle
+- F<n> - marked open at <file:line>; the user's answer: <verbatim> | none yet
+
+## Ready for regrade?
+ready | not ready, because <what a regrade would find not closed or wrong>
+| part new round 1: <the user decision built here, and why it is not a regrade>
 ```
 
-The parent session, not you, decides with the user whether a re-review runs.
+The parent session, not you, decides with the user whether a regrade runs; a
+re-review of your work is a `regrade`, never a fresh `full` round.
 The project stays frozen until the work gets a landing grade and lands.

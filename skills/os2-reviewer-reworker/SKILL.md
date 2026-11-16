@@ -1,6 +1,6 @@
 ---
 name: os2-reviewer-reworker
-description: Dispatch the os2-reviewer-reworker agent to repair work after an os2-reviewer `full` round graded it below A-, fixing exactly and only what the reviewer outlined. Use when asked to "rework the review", "fix the review findings", "run the reworker", or after an /os2-toolkit:os2-review report comes back below A-. Two phases with a stop for the user between them. The project stays frozen until the work lands.
+description: Dispatch the os2-reviewer-reworker agent to repair work after an os2-reviewer `full` round graded it below A-, fixing exactly and only what the reviewer outlined; design findings are marked open and their answers deferred to the next cycle. Use when asked to "rework the review", "fix the review findings", "run the reworker", or after an /os2-toolkit:os2-review report comes back below A-. Two phases with a stop for the user between them. The project stays frozen until the work lands.
 ---
 
 # Rework after a review - exactly and only what the reviewer outlined
@@ -45,6 +45,16 @@ any the sources or the plan already answer, and say which you dropped. Do not
 fix anything yourself, and do not resume the agent until the user has
 answered.
 
+**Design questions are answered for the next cycle, not this one.** Tell the
+user so when you put a `design` finding to them: in this rework it is closed by
+marking it open in the work, and their ruling is built and reviewed afterwards
+as its own change. Building it now puts design the reviewer never saw into the
+repair, and the re-review can no longer confirm the rework (os2-review, "The
+cycle"). If the user still wants it built now, pass that on verbatim; the agent
+will mark that part a new round 1. The same holds for any new idea the user
+raises during the freeze: name it as new design, and offer to park it or to
+withdraw the review.
+
 ## 3. Phase B - resume the same agent
 
 `SendMessage` to the same agent (it keeps its Phase A context) with
@@ -55,14 +65,19 @@ When it returns:
   hunk must map to a finding or a named user answer. An unmapped hunk is
   drift; send it back, do not keep it.
 - Report to the user: findings closed, findings not closed and why, the
-  build/test output, what was noticed and not fixed, and the agent's
-  ready / not-ready answer.
-- **Then stop.** Whether a re-review runs is the user's call (one graded
-  round below A-, then stop and ask - see `/os2-toolkit:os2-review` section 4).
+  build/test output, what was noticed and not fixed, what was deferred to the
+  next cycle, and the agent's ready / not-ready answer.
+- **Then stop, and ask the user whether to land.** If every finding is
+  closed and every hunk maps, the review's judgement has been carried out:
+  the question is landing, not another round. A re-review, if the user wants
+  one, is a **`regrade`** (`/os2-toolkit:os2-review --regrade`, with the hunk
+  map) - never a fresh `full` round on the same material, which re-samples
+  what the first round left unopened and cannot converge.
 
 ## 4. After landing, not before
 
 Out-of-scope items and everything noticed during the freeze are discussed
 with the user - ticket (`os2-toolkit:track`), fix, or `know absent` for a
-closed dead end - only **after** the repaired work has been re-reviewed
-**and** has landed.
+closed dead end - only **after** the repaired work has landed (regraded,
+if the user asked for that). The design rulings deferred to the next cycle
+come first on that list.

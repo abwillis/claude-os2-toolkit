@@ -30,8 +30,8 @@ routes into the reference, verifies against the headers, and writes the code.
 | `os2-toolkit:ingest` | File OS/2 material you mention (a downloaded PDF, a folder of books, an SDK) into your local OS/2 library - see [`PATHS.md`](PATHS.md). |
 | `os2-toolkit:track` | File, find, comment on and close work items on a Gitea tracker - work state, as opposed to the durable facts `know` holds. |
 | `os2-toolkit:know` | The knowledge cache: search it before the books, and record what a session established - including what it searched for and did *not* find. |
-| `os2-toolkit:os2-review` | On request, dispatch the `os2-reviewer` agent: a grounded review of a change touching OS/2 semantics with an A-F grade against a landing bar of A-, or a cheap citations-only pass. A `full` round freezes the project until the work lands. |
-| `os2-toolkit:os2-reviewer-reworker` | After a review below A-, dispatch the `os2-reviewer-reworker` agent: root-cause analysis, a stop for your answers, then a fix of exactly and only the reviewer's findings, mapped hunk by hunk. |
+| `os2-toolkit:os2-review` | On request, dispatch the `os2-reviewer` agent: a grounded review of a change touching OS/2 semantics with an A-F grade against a landing bar of A-, a cheap citations-only pass, or a regrade of a rework. A `full` round freezes the project until the work lands; its re-review is a regrade, which confirms the findings closed and never re-samples. |
+| `os2-toolkit:os2-reviewer-reworker` | After a review below A-, dispatch the `os2-reviewer-reworker` agent: root-cause analysis, a stop for your answers, then a fix of exactly and only the reviewer's findings, mapped hunk by hunk; design findings are marked open and their answers deferred to the next cycle. |
 
 The tools land on your `PATH` (`lx_export.py`, `lx_disasm.py`, `lx_resolve_imports.py`,
 `driver_re.py`, `inf2txt.sh`, `ddk_unpack.py`, `kdb_cmd.py`, `os2-lib`, `know`, `track` ...).
