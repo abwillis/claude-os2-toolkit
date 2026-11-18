@@ -166,6 +166,13 @@ shifts get the sign extension wrong for negative coordinates. The macro table is
 This is the spine of the guide. OS/2 code is largely a pile of facts about
 OS/2, and a fact whose origin is unrecorded is a fact nobody can check.
 
+**This section is about facts about OS/2** - what IBM's code does, an offset, a
+size, an ordinal, a return code. It does not apply to the project's own
+decisions, plans or work items. A decision is stated in its own words where it
+applies; it is not attributed to a plan, a ticket, a person or a date, because
+it is true by being written there and nothing about it needs re-checking. Git
+history records how it was reached.
+
 ### Rule 1.1: A new constant gets a name and a cited source
 
 **Trigger:** You are about to write a literal - a struct offset, a size, an
@@ -215,8 +222,8 @@ determines how the next reader re-checks it:
   where the guesses live, and it is the category that looks identical to
   knowledge.
 
-(This is the same three-way split `os2ref/` tags as `[DOC-IBM]` / `[OBS-RE]` /
-`[DOC]`. Preserve the distinction when you quote it.)
+(`os2ref/README.md`'s provenance tags make the same split finer; its key is the
+one list of them. Preserve the distinction when you quote a fact.)
 
 **Why:** A source's kind records *which question it is competent to answer*.
 This is not pedantry - the categories cover different failure modes. Where
@@ -283,7 +290,7 @@ values from "publicly documented specifications" - while citing a DDK header in
 a `_Static_assert` 560 lines below, and after its layouts had been fixed by
 reading IBM's headers directly. A file's self-description is a fact like any
 other: it needs a source, and it needs to match what the file actually does.
-Where it doesn't, fix it under Rule 1.7 rather than quietly. Describe your
+Where it doesn't, fix it under Rule 1.7. Describe your
 sources as they are - "transcribed from IBM's Toolkit headers" is accurate and
 checkable; a vaguer claim that sounds better is the same unsourced assertion
 Rule 1.3 exists to stop.
@@ -347,30 +354,25 @@ to produce and free to record. So is "we tried this and it did not work,
 because X." Both prevent the same work being done again by someone who has no
 way to know it was already done.
 
-### Rule 1.7: Supersede in place - never delete a claim, mark it
+### Rule 1.7: Correct it and delete the old text; a natural misreading is itself a fact
 
 **Trigger:** You have discovered that something recorded - a comment, a contract
-document, an offset table, a hypothesis - is wrong.
+document, an offset table, a spec, a rule - is wrong.
 
-**Action:** Leave the wrong claim visible, mark it wrong, and put the evidence
-next to it. Do not quietly delete it and write the right answer in its place.
+**Action:** Fix the text and delete the wrong version. Say in the commit message
+what was wrong and how you know. If the wrong reading is one the next person will
+naturally make, record that as an OS/2 fact: supersede the `know` row that held
+it (`know supersede`), or add one present-tense sentence beside the right answer -
+"`+0x1a` is `CellByteSize`, not a far pointer, though a zero there reads like
+one." Do not keep the wrong claim, a retraction block or a "replaces" line.
 
-**Why:** A deleted wrong claim takes two things with it: the knowledge that
-someone once believed it, and the reason they were wrong. Both are exactly what
-stops the next reader - who will have the same plausible thought - from
-re-deriving it. "This says X; the obvious reading is Y; here is why Y is wrong
-and how we know" is worth far more than a bare corrected value.
-
-The shape that works is a retraction block at the top of the document, keeping
-every wrong claim, marking it, citing the source that overturned it, and
-explaining the correct reading. For example, a field at `+0x1a` recorded as
-*"we read this as an AVIO-PS far pointer; it is `CellByteSize`; here is why the
-misread was natural"* - because the next person to see a zero there will
-otherwise reach the same conclusion.
-
-This applies to code comments too. If a comment records a belief that turned out
-wrong, correct it *and say it was wrong*. A comment is a record of what was
-known, not just an instruction to the compiler.
+**Why:** Nobody cites a sentence in a comment or a document by id, so deleting it
+breaks nothing, and git keeps the old text with the reason it changed. A reader
+wants the right answer; making them read the wrong one first costs them, and every
+correction kept in place grows the document for good. The one thing worth keeping
+is the trap, and that is a fact about OS/2 with its own home. `know` is where the
+in-place rule belongs: its rows are cited by id, merged between stores and found
+by search, so a retracted row stays findable and points at its correction.
 
 ---
 

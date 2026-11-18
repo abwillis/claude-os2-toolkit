@@ -44,6 +44,10 @@ reader knows what is IBM's word versus an observation of the binaries, and can r
 - **[unverified]** - an inline marker on an individual claim the author could not confirm against
   any source at hand (used sparingly, in place of asserting it); everything else is sourced.
 
+This list is the one key: other files in the kit point here rather than restating it. The tags
+mark **facts about OS/2** - here and in the `know` store. A project's own decisions, plans and work
+items carry none.
+
 A doc may also carry a dated **"Ratified"** note. That records a pass where the doc's claims were
 re-checked field-by-field against a named primary (a Toolkit/DDK header, an IBM book) and either
 confirmed, upgraded to `[DOC-IBM]`, or corrected in place. It is a statement about *that* review,
