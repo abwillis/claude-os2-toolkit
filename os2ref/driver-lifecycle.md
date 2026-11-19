@@ -826,6 +826,23 @@ updates them afterwards [OBS-RE] (unpublished notes).
   32-bit successor is KEE's `KernDynamicAPI`, which copies a template stub per call instead of using the slots [OBS-RE]
   (unpublished notes). IBM's `OS2CDROM.DMD` calls it at INIT.
 
+- **Registers on failure: three DevHlps the reference does not describe** [OBS-RE] (14.104a SMP kernel, the
+  handlers' bytes; unpublished notes). A host or emulator that answers every failure with "carry set, AX = error"
+  gets these three wrong, and a driver that reads the register after the call sees the difference.
+  - **`PhysToUVirt` (17h)** returns with **ES = 53h** on every failure and on a release (type 2): the DevHlp
+    handler loads ES with 53h before calling the worker, and the worker loads the new selector into ES only on a
+    successful map. A driver that releases the selector it holds in ES gets 53h back, never the freed selector.
+  - **`ABIOSGetParms` (29h)** on a machine without ABIOS sets carry and returns **AX unchanged** (the caller's LID):
+    the handler sets AX = 3 inside a `pusha`/`popa` frame, so the error code is lost and only carry reports the
+    failure. The other ABIOS DevHlps (34h-38h) do return AX = 3 there.
+  - **`AllocateCtxHook` (63h)** sets carry with **no error code** on both failure paths (EBX not -1, and the hook
+    allocation failing): EAX is the allocator's out-pointer stack slot, unwritten in the first case. Community
+    references list 87 here; the shipped kernel does not load it.
+
+  The tell: a hosted driver that works on real OS/2 and misbehaves only after a failed call - typically a pop of a
+  segment register it expected unchanged, or an error path that tests AX. Verify by disassembling the handler named
+  in the kernel's DevHlp table for the code and following it to its `ret`.
+
 The DevHlp catalogue itself is in `kernel-services.md`; the lifecycle calls in `drivers.md`.
 
 ---
