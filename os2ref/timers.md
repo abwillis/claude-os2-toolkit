@@ -111,6 +111,10 @@ The frequency is fixed for the life of the system, so a caller reads it once wit
 `DosTmrQueryFreq` and thereafter only reads `DosTmrQueryTime` around the interval it wants to
 measure.
 
+The count is not monotonic in every state: while a `TIMER0$` client is active it stalls and can step backwards. Where
+the count comes from (the clock driver's `RegisterTmrDD` and IRQ0 handler, the loader's counters), when the two calls
+answer 535, and that measurement: `driver-lifecycle.md` section 6.2a.
+
 ## Wall-clock date and time [DOC-IBM - `bsedos.h`]
 
 `DosGetDateTime` and `DosSetDateTime` read and set the system's real-time clock through a

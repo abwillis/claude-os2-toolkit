@@ -922,6 +922,103 @@ ticks"* (PDD/00295) [DOC-IBM] + [OBS-RE] (unpublished notes: call when the count
 threshold]. `TickCount` can register a **new** handler only from task time inside the kernel; at
 interrupt time it can only change an existing one [OBS-RE] (unpublished notes).
 
+### 6.2a The high-resolution timer: `RegisterTmrDD`, the loader's counters, `DosTmrQueryTime`
+
+**The trap.** `TIMER0.SYS` - the `TIMER0$` high-resolution timer driver, `BASEDEV=TIMER0.SYS` on a stock install - looks
+like the driver that calls DevHlp `RegisterTmrDD` (61h) and so makes `DosTmrQueryFreq` and `DosTmrQueryTime` work. A
+test for their 535 (`ERROR_TMR_NO_DEVICE`, `bseerr.h` [DOC-IBM]) then boots without it. That boot answers 0: TIMER0 is
+not the caller, and removing it does not produce 535.
+
+Measurements below marked [OBS] were taken on Warp Server for e-Business 4.50, kernel revision 14.089 (`ver /r`),
+`PSD=OS2APIC.PSD`, in a VirtualBox VM, with three probes: a 16-bit `DEVICE=` driver calling 61h at its INIT; a
+`BASEDEV=` driver sampling ports 20h, 21h, 40h and 43h at its ring-0 INIT and handing the samples to a program by a
+private generic IOCtl; and 32-bit programs calling the two APIs. [OBS-RE] claims are from the 14.104a SMP kernel, the
+WSeB `OS2LDR` (43008 bytes) and `CLOCK01.SYS` 10.058 (unpublished notes).
+
+**Who registers.**
+- **The clock driver**, `CLOCK01.SYS` (`CLOCK02.SYS` on Micro Channel), in its first INIT (`RTINIT`), which runs from
+  the kernel's implicit base-driver list ahead of every `BASEDEV=` (section 1.2): `CX:DI` = its `PTTimer0` routine, `DL`
+  = `DevHlp_RegisterTmrDD` [DOC-IBM DDK `base/src/dev/clock/clock01/clock01.asm` RTINIT; PDD reference
+  "RegisterTmrDD"]. The shipped `CLOCK01.SYS` matches the source there [OBS-RE].
+- **Not `TIMER0.SYS`**: it makes no 61h call and never reads or writes the timer cells [DOC-IBM DDK
+  `base/src/dev/mme/timer0/`; OBS-RE `TIMER0.SYS`]. A byte scan of an install's drivers and DLLs finds the 61h call only
+  in `CLOCK01.SYS` and `CLOCK02.SYS` [OBS-RE] (bound: a driver that loads `DL` some other way is not excluded).
+- `PTTimer0` is the profiler's entry - function 0 takes timer 0 from VTIMER, 1 gives it back (DDK
+  `base/src/dev/clock/ptt0.asm`) [DOC-IBM]. The kernel stores `CX:DI`; in 14.104a no code reads the stored pointer
+  [OBS-RE] (an absolute-operand scan; a reach through a computed address is not excluded).
+
+**What the loader answers.** The kernel passes the call to the loader's DOSHLP `RegisterTmrDD` (slot
+`DosHlpRegisterTmrDD`, DDK `base/inc/doshlp.inc` [DOC-IBM]) and returns its registers to the driver [OBS-RE]. OS2LDR's
+routine ignores its input and answers [OBS-RE]:
+- `DI:BX` -> the rollover cell, two ULONGs: +0 the current rollover count, +4 the next (DDK
+  `base/src/dev/clock/clockdd.asm`, `qwTmrRollover` [DOC-IBM]);
+- `DI:CX` -> `qwTmr`, the 64-bit count;
+- `EAX` = 1193167, the 8254's input frequency (`doshlp.inc` `TIMER_FREQ_HI`/`TIMER_FREQ_LO` = 1234CFh [DOC-IBM]).
+
+Measured from a `DEVICE=` driver's INIT: carry clear, DI non-zero, BX 0C9Ch, CX 0CA4h, EAX 1193167; read at task time,
+both rollover halves hold 10000h [OBS]. A non-zero DI makes the kernel keep both pointers and the frequency and set its
+timer-status bit [OBS-RE]. The DOSHLP routine is init code, discarded at the end of initialisation, and 61h is an
+INIT-only DevHlp (PDD reference "RegisterTmrDD") disabled with the others then (section 5) [OBS-RE].
+
+**Who advances the count: the clock driver, not DOSHLP.** DOSHLP has no IRQ0 code [OBS-RE]. `CLOCK01` [DOC-IBM
+`clock01.asm`; OBS-RE]:
+- in RTINIT, after registering, writes current = next = 10000h into the rollover cell;
+- in its second INIT (`RTINIT2`, the command-0 INIT the kernel sends `CLOCK$` after the loadable drivers are in,
+  section 1.3) programs 8254 counter 0 to mode 2 with count 0 (10000h, about 18.2 Hz) and hooks IRQ0, exclusive;
+- on each IRQ0 (`PTInt`): add = current; current = next; `qwTmr += add`, saturating at 7FFFFFFF:FFFFFFFFh.
+
+The system tick is a different interrupt (the RTC on IRQ 8). So `qwTmr` is 0 until RTINIT2 and a whole number of
+10000h periods after it [INF from the above]; measured, it advanced 23 periods over a 23-period interval [OBS].
+
+**The gate.** `DosTmrQueryFreq` and `DosTmrQueryTime` test the timer-status bit first and answer 535, writing nothing,
+when it is clear; only a `RegisterTmrDD` whose DOSHLP answer had DI non-zero sets it [OBS-RE]. The clock driver is
+always in the base list and IBM's OS2LDR always answers DI non-zero, so with IBM's loader no CONFIG.SYS reaches 535
+[INF]. Measured with `BASEDEV=TIMER0.SYS` removed: `DosTmrQueryFreq` answers 0 with 1193167, `DosTmrQueryTime` advances
+at that rate, and `DosOpen` of `TIMER0$` answers 110 [OBS]. `DosTmrQueryFreq` copies the EAX the registration returned
+[OBS-RE].
+
+**What `DosTmrQueryTime` computes.** The kernel calls the PSD's `PSD_QUERY_SYSTEM_TIMER` (packet `PSD_QRYTMR`, the
+DevCon SMP book's `PSD.H` [DOC-IBM]); `OS2APIC.PSD` exports no timer function, so the kernel's default calls DOSHLP's
+32-bit query routine [OBS-RE]. That routine [OBS-RE OS2LDR; port and command values DDK `base/inc/timer.inc` and
+`base/src/dev/mouse/hw.inc`, DOC-IBM]:
+1. interrupts off; reads the master 8259's ISR (OCW3 0Bh) and IRR (OCW3 0Ah) at port 20h and ORs them;
+2. latches counter 0 (`out 43h,0`), reads the count low then high from 40h, reads port 20h again (the IRR);
+3. live part = (10000h - count) mod 10000h - the fixed reload RTINIT2 programs, not the rollover cell;
+4. IRQ0's bit clear in both reads: `qwTmr` + live part. Set before the latch: `qwTmr` + live part + the current
+   rollover (the period PTInt has not added yet). Set only after the latch: `qwTmr` + the current rollover;
+5. a signed overflow saturates.
+
+**When the count is not monotonic.**
+- **`TIMER0$` in use.** On its first client (an open of `TIMER0$`, or its IDC registration) TIMER0 takes IRQ0 from the
+  clock driver through `CLOCK$`'s IDC and programs counter 0 for a 1 ms period; on its last client it gives IRQ0 back
+  (DDK `mme/timer0/clockidc.c`, `timerset.c` [DOC-IBM]). Meanwhile PTInt does not run and `qwTmr` stops. Measured with
+  `TIMER0$` open, five calls about 128 ms apart: 057EFC07h, 057EFB91h, 057FFF2Dh, 057EFB58h, 057EFFA9h - the frozen
+  count, plus a live part within one 1 ms period, plus once a pending IRQ0's 10000h. After the close the next value,
+  057E002Ah, was below all of them, and the count then advanced normally [OBS].
+- **Before RTINIT2.** Between the clock driver's two INITs `qwTmr` is 0, counter 0 runs in mode 2 with reload 10000h,
+  and IRQ0 is masked [OBS-RE; OBS]. A `BASEDEV=` probe reading the 8259 and counter 0 in the query routine's order at
+  its ring-0 INIT found [OBS]: IMR F9h (IRQ0 masked), ISR 0, counter 0 status 34h; IRR bit 0 **clear** at the INIT's
+  first samples and **set** from counter 0's first terminal count on, staying set across later wraps - a masked,
+  unacknowledged IRQ0 does latch. The same probe built as a `.DMD` (the last `BASEDEV=` class), alone and in one boot
+  with the first: the bit is clear again when each base INIT begins, even after an earlier driver's INIT left it set.
+  At nine INIT entries in seven boots the count was 5.6-51.6 ms past the last wrap. So the routine's answer at a base
+  INIT is (10000h - count) mod 10000h until counter 0's next terminal count, then that plus 10000h: a 54.9 ms sawtooth
+  that never advances. After boot (IMR F8h) the bit reads clear in every sample.
+- **Not established:** what clears the latched IRQ0 between base driver INITs, and whether it happens per INIT. A
+  counter reload cannot (an 8259 drops a latched IRR bit only on acknowledge or re-initialisation) [INF]. To settle it:
+  read the kernel's `BASEDEV=` INIT path for 8259 writes (an OCW3 poll, an ICW, an unmask and acknowledge), or set a
+  kernel-debugger I/O breakpoint on ports 20h/21h during the base load. Bound on all of the window's [OBS]: VirtualBox's
+  emulated 8259 and 8254, one kernel revision.
+
+**How to verify.** `grep -n DevHlp_RegisterTmrDD` over the DDK's `base/src/dev/clock/` (two hits, `clock01` and
+`clock02`) and `base/src/dev/mme/timer0/` (none); disassemble the loader's DOSHLP table entry at
+`DosHlpRegisterTmrDD`; for behaviour, a `DEVICE=` driver that calls 61h at INIT and prints DI, BX, CX, EAX, and a
+program that calls `DosTmrQueryTime` with and without `TIMER0$` open.
+
+**The tell.** A 535 test whose recipe removes `TIMER0.SYS` and still gets 0; a high-resolution time that stalls or
+steps backwards while a `TIMER0$` client is active; an emulated `RegisterTmrDD` that returns the caller's own registers,
+so the clock driver takes its `PTTimer0` offset for a selector.
+
 ### 6.3 Context hooks
 
 IBM: `AllocateCtxHook`/`ArmCtxHook` let interrupt-time code request task-time work; arming is legal
