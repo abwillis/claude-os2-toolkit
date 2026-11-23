@@ -57,7 +57,7 @@ The agent has three modes and the dispatch names one. **A `full` round costs
 roughly twenty times a `citations` round**, so choosing `full` by reflex is the
 most expensive habit available here.
 
-- **`citations`** - a mechanical pass: open every source the change cites and
+- **`citations`** - a mechanical pass: open every OS/2 source the change cites and
   check the sentence is there and says what it is cited for. No grade, no C
   review, no architecture opinion. Measured across three `full` rounds on one
   change, this single activity produced **six of that round's eight findings**;
@@ -160,7 +160,7 @@ paths or a revision, use that instead.
    "round 1, no history". **For a `regrade`, also attach the reworker's Phase B
    hunk map** - the regrade checks each hunk against it.
 5. **The populations you know of** - the denominators the reviewer will otherwise
-   have to guess: how many citations the change contains, how many comments
+   have to guess: how many OS/2-source citations the change contains, how many comments
    assert an OS/2 fact, how many ordinal or dispatch-table rows were touched, how
    many new constants, how many call sites a changed function has. You can count
    these with `grep` in seconds and the reviewer cannot know it has them all.
@@ -216,7 +216,7 @@ The prompt is the package:
 > **Grade history:** [round N; each previous grade + the rubric line that set it;
 > what was repaired between rounds; the previous round's baseline patch and
 > report - or "round 1, no history"]
-> **Populations:** [citations N, OS/2-fact comments N, ordinal rows touched N,
+> **Populations:** [OS/2 citations N, OS/2-fact comments N, ordinal rows touched N,
 > new constants N, call sites of <fn> N - as many as you counted]
 > **Exception list:** [allowlisted divergences / skipped cases / recorded
 > out-of-scope findings, each with its citation - or "none"]

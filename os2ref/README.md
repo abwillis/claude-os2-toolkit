@@ -44,6 +44,10 @@ reader knows what is IBM's word versus an observation of the binaries, and can r
 - **[unverified]** - an inline marker on an individual claim the author could not confirm against
   any source at hand (used sparingly, in place of asserting it); everything else is sourced.
 
+This list is the one key: other files in the kit point here rather than restating it. The tags
+mark **facts about OS/2** - here and in the `know` store. A project's own decisions, plans and work
+items carry none.
+
 A doc may also carry a dated **"Ratified"** note. That records a pass where the doc's claims were
 re-checked field-by-field against a named primary (a Toolkit/DDK header, an IBM book) and either
 confirmed, upgraded to `[DOC-IBM]`, or corrected in place. It is a statement about *that* review,
@@ -110,6 +114,7 @@ Find the row that matches what you are doing and load only those docs.
 | Writing a DASD device manager (DMD): Strategy-1/2, drive letters, IORBs to ADDs | `dasd-device-manager.md` |
 | Hardware detection: snoopers, the Resource Manager's trees, `PREVIOUS.DAT` | `hardware-detection.md` |
 | The system error log: `LOG.SYS`, `LOGDAEM`, `LogAddEntries`/`DosLogEntry` | `error-log.md` |
+| Security Enabling Services: enabling SES, logon/guest/lock, ISS drivers, `DevHlp_Security` (44h) and the kernel's security hooks | `security-enabling-services.md` |
 | What a cell of `DOSCALL1.DLL`'s data objects holds, who writes it, what locks it | `doscall1-data-objects.md` |
 | 16<->32-bit thunking | `thunking.md` |
 | Inspecting an LX/NE binary, fixups, page layout | `executable-formats.md` |
@@ -145,6 +150,7 @@ the LIS form follows the kernel *variant*, not the CPU count.
   - `driver-lifecycle.md` - how the kernel loads, initialises, calls and shuts down its drivers
   - `hardware-detection.md` - snoopers, the Resource Manager's trees, snoop levels and `PREVIOUS.DAT`
   - `error-log.md` - the error-log service: `LOG.SYS`, `LOGDAEM`, the writer, the `Log*`/`DosLog*` calls and what they answer
+  - `security-enabling-services.md` - Security Enabling Services: enabling it, logon and lock behaviour, ISS drivers, and the unpublished `DevHlp_Security` kernel interface
   - `pm-graphics.md` - the Presentation Manager graphics path
   - `message-queue.md` - the PM message queue and its kernel wake
   - `thunking.md` - 16<->32-bit thunking

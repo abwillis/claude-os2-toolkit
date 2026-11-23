@@ -41,15 +41,17 @@ that already exist.
 - **`full`** (default) - everything below: Phase 0 grounding, the Phase 1 attack,
   the Phase 2 report, a letter grade.
 - **`citations`** - the mechanical pass ONLY, and **no letter grade**. For every
-  citation the change contains - a comment naming a file, a doc line naming a
-  source, a provenance tag with a path, a `file:line` reference, a cited ordinal,
-  error number or message number, a book plus a topic - open the cited source,
+  citation of an OS/2 source the change contains - a comment naming an IBM
+  header or book, a provenance tag with a path, a `file:line` reference into IBM
+  or vendor material, a cited ordinal, error number or message number - open the cited source,
   find the sentence, and report whether it says what the citing text says it
   says. Nothing else: no C review, no architecture opinion, no doctrine audit, no
   grade. Skip Phase 0's grounding note (you are checking citations, not grading
   facts) and emit only the **Coverage** and **Citation reconciliation** sections
   of the Phase 2 format, ending with a literal `RECONCILED n/m` line and the list
-  of every citation you could not open.
+  of every citation you could not open. A reference to the project's own plans,
+  tickets or decisions is not an OS/2 citation: do not reconcile it, and never
+  ask for one - a project decision is stated where it applies, not sourced.
 
   **Why this mode exists, so you do not quietly upgrade it into a full review.**
   Measured across three `full` rounds on one change, the single highest-yielding
@@ -215,7 +217,7 @@ that your denominator is incomplete for that reason.
 ### Count the population before you sample it, and report both
 
 For every dimension you attack there is a *set* of things that could carry the
-defect: every citation in the diff, every comment asserting an OS/2 fact, every
+defect: every OS/2-source citation in the diff, every comment asserting an OS/2 fact, every
 ordinal-table row touched, every new constant, every call site of a changed
 function, every path in a changed table. **Name that set, count it, and say how
 much of it you actually opened.** A finding list with no denominator cannot be
@@ -261,13 +263,13 @@ exists - and a clean result cannot be *earned*, only sampled into.
      A comment, log string or doc line asserting a fact about OS/2 is wrong or it
      is right; report the wrong ones. **Do NOT count claims, do NOT compute or
      report a ratio or density of comments to code, and never grade on comment
-     volume.** A citation is preferable to a restatement - a citation cannot be
+     volume.** For an OS/2 fact, a citation is preferable to a restatement - a citation cannot be
      wrong about a detail it does not state - but that is a reason to fix a
      specific claim, never a reason to grade prose. A ratio has no terminating
      condition: "still too dense" is always available to a reviewer and "a little
      more trimming" always to an author, so the loop never ends. The measured
      cost of having one was four graded rounds that all returned the same letter.
-   - **Is a restatement standing where a citation would do?** Name the source the
+   - **Is a restatement of an OS/2 fact standing where a citation would do?** Name the source the
      text should have pointed at instead. The repair for a wrong count in a
      comment is usually *deleting the summary and citing the source*, not writing
      a different count.
@@ -309,8 +311,10 @@ exists - and a clean result cannot be *earned*, only sampled into.
    "the special ones") used as a gate where a declared property exists; a
    heuristic - a name match, a case test, a byte pattern, a nearest-symbol
    lookup, a threshold - standing where an authoritative answer was available; a
-   block contained rather than fixed; a doc claim deleted rather than superseded
-   in place; an out-of-scope finding fixed instead of recorded and left.
+   block contained rather than fixed; an out-of-scope finding fixed instead of
+   recorded and left. A wrong claim corrected by deleting it is not a violation:
+   git keeps the old text, and a natural misreading belongs in `know` or one
+   sentence beside the fact (`c-guide.md` Rule 1.7).
 
 ---
 
@@ -328,7 +332,7 @@ symbol or line. Then "Could not find:" with what you searched.
 report without it is a report of unknown size.** One line each:
 
 ```
-citations in the diff          exhausted (28/28)
+OS/2 citations in the diff     exhausted (28/28)
 comments asserting OS/2 fact   12/52 opened  - not opened: config_process.c:88-140, 201-216
 16-bit entries touched         exhausted (0/0) - none
 new constants                  exhausted (6/6)
@@ -480,7 +484,7 @@ one, which is the whole reason this block exists.
   recorded and left.
 - **The ceiling for unsettled claims is BANDED BY VOLUME.** An unsettled claim
   is: a **behaviour** claim asserted without the measurement that would settle
-  it; a doc claim deleted rather than superseded; a case landed against a
+  it; a case landed against a
   documented expected value when a real-OS/2 capture of that case was actually
   **obtainable** and was not taken.
   - **one** - cannot exceed **B-**
@@ -516,7 +520,7 @@ one, which is the whole reason this block exists.
   > density limb to this row.
 - **A range**: measured against real OS/2 where possible, with
   documented-expected / measured-real / measured-here kept distinct in the report
-  rather than collapsed to pass/fail; provenance cited at each site; fixtures
+  rather than collapsed to pass/fail; each OS/2 fact's provenance cited at its site; fixtures
   ownership-gated; out-of-scope findings recorded with a kept reproducer; **and
   every population in your Coverage section either exhausted or its unopened
   items named**. An A is a claim that there is nothing left to find, so it cannot

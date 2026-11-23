@@ -93,8 +93,8 @@ The model is not trained on them, so:
      the cost is not the wrong label, it is the work that never gets attempted.
 
    If you cannot source a judgment, present it as a question to verify, not a finding.
-5. **Respect provenance.** `os2ref/` marks each claim `[DOC-IBM]` / `[OBS-RE]` / `[DOC]` / `[SRC]`
-   (see the key in `os2ref/README.md`). A community/EDM2 fact (`[DOC]`) is weaker than an IBM header
+5. **Respect provenance.** `os2ref/` tags each OS/2 claim with how it was established (the key, the
+   only list, is `os2ref/README.md`). A community/EDM2 fact (`[DOC]`) is weaker than an IBM header
    fact (`[DOC-IBM]`); don't launder one into the other. A `[SRC]` fact - read from the source of a
    component that runs *on* OS/2, such as kLIBC - is authoritative for that component and silent
    about the platform, so it does not override `[DOC-IBM]` on what OS/2 itself does. Use
@@ -136,7 +136,7 @@ commenting load-bearing weirdness - see **`c-guide.md`**.
 ## The build loop
 
 1. **Route.** Task -> `os2ref/README.md` -> load the 1-3 relevant docs (e.g. a dialog: `pm-controls.md`
-   + `resources-and-dialogs.md`; a folder subclass: `wps-classes.md` + `som.md`). Don't load all 50.
+   + `resources-and-dialogs.md`; a folder subclass: `wps-classes.md` + `som.md`). Don't load all 51.
 2. **Write** in IBM-canonical names. Enable the right include switches (`#define INCL_WIN`,
    `INCL_GPI`, `INCL_DOSFILEMGR`, `INCL_WINWORKPLACE`, ...) - `os2ref/` and the headers name them.
 3. **Verify** each nontrivial prototype/constant against the Toolkit header if present

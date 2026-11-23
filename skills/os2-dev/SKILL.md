@@ -28,7 +28,7 @@ installed copy - updates overwrite it.
 
 ## What the kit gives you
 
-- **`os2ref/`** - 50 pristine, source-tagged reference docs covering OS/2 internals **and** the full
+- **`os2ref/`** - 51 pristine, source-tagged reference docs covering OS/2 internals **and** the full
   application API surface (file/mem/process/IPC/exceptions, PM windows/controls/dialogs/GPI, VIO,
   clipboard/DDE, drag-drop, printing, profiles, EAs, SOM, WPS, REXX, sockets, MMPM/2 ...).
   **`os2ref/README.md` is the router** - it maps a task to the doc(s) to load. Load docs *on demand*,
@@ -122,11 +122,10 @@ These are the disciplines low-level OS/2 work rewards; each one was paid for the
   (Presentation Manager is a Win32 *cousin* - `WinRegisterClass`/`WinCreateWindow`/`WinGetMsg`/
   `WinDefWindowProc`, `WM_*` window procs, native `WC_*` controls; grep `os2ref/pm-window-messaging.md`
   before claiming no analogue exists), and answering a strategy question before inventorying the machine (the `setup` skill's Step 1).
-- **Provenance:** the corpus tags every claim `[DOC-IBM]` (IBM header/book), `[OBS-RE]` (observed by
-  reverse-engineering), `[DOC]` (community/secondary, e.g. EDM2), `[SRC]` (read from the source of a
-  component that runs on OS/2 but is not OS/2 - e.g. kLIBC). Preserve that distinction when you
-  quote it; a community fact is not IBM's word, and a `[SRC]` fact describes one implementation, not
-  the platform. Full key in `os2ref/README.md`.
+- **Provenance:** the corpus tags every OS/2 claim with how it was established; the key is
+  `os2ref/README.md`, and only there. Preserve the tag when you quote a fact: a community fact is not
+  IBM's word, and a `[SRC]` fact describes one implementation, not the platform. The tags and the
+  citation rules are for facts about OS/2 - a project's own decisions are stated, not sourced.
 - **Docs before disassembly.** If an interface is documented (it usually is, in `os2ref/` or an IBM
   `.INF` via `inf2txt`), read the doc - don't reverse-engineer a documented rule or "run to discover"
   a documented contract.

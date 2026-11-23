@@ -148,9 +148,11 @@ absent; stop looking"* converts an open-ended search into a closed question, and
 produce and free to record. Record it with what you searched and how, so the next person can tell
 your negative from a failed search.
 
-**Corrections supersede in place.** If you find something here is wrong, do not silently replace it:
-mark the old claim, cite what overturned it, and say why the wrong reading was natural. The next
-reader will have the same plausible thought.
+**Corrections replace the wrong text.** If you find something here is wrong, fix it, cite what
+overturned it, and say in the commit message what was wrong. Where the wrong reading is a natural
+one, state that beside the fact in one present-tense sentence ("`+0x1a` is `CellByteSize`, not a
+far pointer") - the trap is part of the fact; the history of who believed it is git's. In `know`, a
+wrong row is corrected with `know supersede`, which keeps it findable and pointing at its correction.
 
 ## 7. Verify before you commit
 
